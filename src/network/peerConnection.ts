@@ -84,7 +84,8 @@ export class PeerConnection implements GameTransport {
     return {
       host: config.host,
       port: config.port,
-      path: config.path,
+      // PeerJS builds wss://host:port + path + "peerjs"; path must not be empty.
+      path: "/",
       secure: config.secure,
       debug: import.meta.env.DEV ? 2 : 0,
     };

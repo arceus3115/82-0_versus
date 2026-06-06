@@ -37,7 +37,7 @@ function fromEnv(): PeerServerConfig | null {
   return {
     host: host.trim(),
     port: Number.isFinite(port) ? port : secure ? 443 : 80,
-    path: normalizePath(import.meta.env.VITE_PEER_PATH),
+    path: "/",
     secure,
   };
 }
