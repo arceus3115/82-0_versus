@@ -1,0 +1,6 @@
+{
+  "host": "versus-peer-server.onrender.com",
+  "port": 443,
+  "path": "/",
+  "secure": true
+}

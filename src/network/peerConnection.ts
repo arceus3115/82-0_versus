@@ -79,8 +79,8 @@ export class PeerConnection implements GameTransport {
     return generateLobbyCode(new SeededRNG((Math.random() * 2 ** 32) >>> 0));
   }
 
-  private peerOptions() {
-    const config = requirePeerServerConfig();
+  private async peerOptions() {
+    const config = await requirePeerServerConfig();
     return {
       host: config.host,
       port: config.port,
@@ -90,11 +90,12 @@ export class PeerConnection implements GameTransport {
     };
   }
 
-  private initHostPeer(): Promise<{ code: string; peerId: string }> {
+  private async initHostPeer(): Promise<{ code: string; peerId: string }> {
+    const options = await this.peerOptions();
     return new Promise((resolve, reject) => {
       const code = this.makeCode();
       const peerId = `${PEER_PREFIX}${code}`;
-      const peer = new Peer(peerId, this.peerOptions());
+      const peer = new Peer(peerId, options);
       this.peer = peer;
 
       const fail = (err: unknown) => {
@@ -161,9 +162,14 @@ export class PeerConnection implements GameTransport {
     conn.on("error", (err) => this.handlers.onError(String(err)));
   }
 
-  private initGuestPeer(playerId: string, code: string, guestName: string): Promise<void> {
+  private async initGuestPeer(
+    playerId: string,
+    code: string,
+    guestName: string,
+  ): Promise<void> {
+    const options = await this.peerOptions();
     return new Promise((resolve, reject) => {
-      const peer = new Peer(playerId, this.peerOptions());
+      const peer = new Peer(playerId, options);
       this.peer = peer;
       const hostPeerId = `${PEER_PREFIX}${code}`;
 

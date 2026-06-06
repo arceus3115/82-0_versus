@@ -71,7 +71,7 @@ Deploys from **`main`** via GitHub Actions (no `gh-pages` branch).
 
 1. **Settings → Pages → Build and deployment → Source:** **GitHub Actions**
 2. Add Actions secrets for online mode (see [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md))
-3. Push to `main` (or run **Deploy GitHub Pages** workflow manually)
+3. Push to `main` (or run **Deploy GitHub Pages** workflow manually in the Actions tab)
 
 The workflow in `.github/workflows/deploy-pages.yml` runs `data:build`, builds the Vite app, and publishes `dist/`.
 

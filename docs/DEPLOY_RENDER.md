@@ -13,9 +13,24 @@ Online play needs a tiny **PeerJS signaling server**. The game still runs in the
 
 **Free tier:** the service sleeps after ~15 minutes idle. The first player connection after sleep may take up to a minute (the app shows a Connecting screen during this).
 
-## 2. Wire the static site build
+## 2. Point the game at your Render host
 
-In your GitHub repo: **Settings → Secrets and variables → Actions → New repository secret**
+**Option A — `public/peer-config.json` (simplest)**
+
+Edit `public/peer-config.json` with your Render hostname, commit, and push to `main`:
+
+```json
+{
+  "host": "versus-peer-server.onrender.com",
+  "port": 443,
+  "path": "/",
+  "secure": true
+}
+```
+
+Replace the hostname if your Render service name differs.
+
+**Option B — GitHub Actions secrets** (baked into the JS bundle at build time)
 
 | Secret | Example value |
 |--------|----------------|
@@ -23,7 +38,9 @@ In your GitHub repo: **Settings → Secrets and variables → Actions → New re
 | `VITE_PEER_PORT` | `443` |
 | `VITE_PEER_SECURE` | `true` |
 
-Optional: `VITE_PEER_PATH` = `/` (default)
+Do **not** add an empty `VITE_PEER_PATH` secret — omit it entirely (defaults to `/`). An empty value breaks the WebSocket URL.
+
+Build checks env first, then falls back to `peer-config.json`.
 
 ## 3. Deploy the game (GitHub Pages)
 
