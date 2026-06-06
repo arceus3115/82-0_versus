@@ -65,7 +65,7 @@ export default function App() {
       <div className="app">
         <header className="topbar">
           <span className="logo">VERSUS</span>
-          <span className="tag">82–0 draft</span>
+          <span className="tag">NBA draft</span>
         </header>
 
         <main className="home">

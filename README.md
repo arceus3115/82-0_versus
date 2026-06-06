@@ -1,6 +1,6 @@
-# Versus — 82–0 Draft + Streak
+# Versus
 
-Real-time, lobby-based multiplayer web game: snake draft of NBA player-seasons, mulligans, then synchronized streak simulation.
+Real-time, lobby-based multiplayer web game: snake draft of NBA player-seasons, mulligans, then simulated box-score results.
 
 **Hosting:** static SPA on GitHub Pages. Multiplayer uses PeerJS (host-authoritative state) or local `BroadcastChannel` for two-tab testing.
 
@@ -64,7 +64,7 @@ npm run deploy
 
 Set Pages source to the `gh-pages` branch.
 
-Update `base` in `vite.config.ts` if your repo name isn't `82-0_versus`.
+Pages `base` is derived from your GitHub repo name in CI. For local deploys, set `PAGES_BASE` if needed.
 
 ## Architecture
 
