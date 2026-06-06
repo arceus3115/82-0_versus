@@ -126,12 +126,7 @@ export class GameEngine {
 
   private offerCardsForCurrentPick() {
     const drafted = getDraftedPool(this.state.players);
-    this.offeredInternal = generateCardOffer(
-      this.pool,
-      drafted,
-      this.rng,
-      this.recentOfferSet(),
-    );
+    this.offeredInternal = generateCardOffer(this.pool, drafted, this.rng, this.recentOfferSet());
     this.rememberOffer(this.offeredInternal);
     this.state.offeredCards = toDisplayOffer(this.offeredInternal);
     this.state.pickDeadline = Date.now() + PICK_TIMER_MS;
@@ -190,15 +185,12 @@ export class GameEngine {
       this.pushFeed(`Tie game — both teams at ${result.scores[0]?.rating ?? "—"} points.`);
     } else {
       const winner = this.state.players.find((p) => p.id === result.winnerId);
-      const pts =
-        result.predictedStatlines.find((l) => l.playerId === result.winnerId)?.PTS ?? "—";
+      const pts = result.predictedStatlines.find((l) => l.playerId === result.winnerId)?.PTS ?? "—";
       this.pushFeed(`${winner?.name} wins — ${pts} team points.`);
     }
 
     for (const detail of result.simulationDetails) {
-      const story = detail.playerLogs
-        .map((log) => `${log.player_name}: ${log.label}`)
-        .join(", ");
+      const story = detail.playerLogs.map((log) => `${log.player_name}: ${log.label}`).join(", ");
       this.pushFeed(`${detail.teamName} — ${story}`);
     }
 
@@ -239,7 +231,7 @@ export class GameEngine {
         this.handleFullMulligan(senderId);
         break;
       case "mulligan_year":
-        this.handleYearMulligan(senderId, message.playerName);
+        this.handleYearMulligan(senderId);
         break;
       case "confirm":
         this.handleConfirm(senderId);
@@ -274,8 +266,7 @@ export class GameEngine {
     if (!player) return;
 
     const drafted = getDraftedPool(this.state.players);
-    const card =
-      this.offeredInternal.find((c) => c.id === cardId) ?? this.offeredInternal[0];
+    const card = this.offeredInternal.find((c) => c.id === cardId) ?? this.offeredInternal[0];
     if (
       !card ||
       drafted.ids.has(card.id) ||
@@ -297,9 +288,7 @@ export class GameEngine {
     this.state.pickHistory = [pickRecord, ...this.state.pickHistory];
 
     const label = auto ? "(auto-pick)" : "";
-    this.pushFeed(
-      `${player.name} drafted ${card.player_name} (${card.season}) ${label}`.trim(),
-    );
+    this.pushFeed(`${player.name} drafted ${card.player_name} (${card.season}) ${label}`.trim());
 
     this.state.currentPickIndex += 1;
     this.clearPickTimer();
@@ -325,12 +314,7 @@ export class GameEngine {
     if (!player || player.mulligan.fullUsed || this.offeredInternal.length === 0) return;
 
     const drafted = getDraftedPool(this.state.players);
-    this.offeredInternal = generateCardOffer(
-      this.pool,
-      drafted,
-      this.rng,
-      this.recentOfferSet(),
-    );
+    this.offeredInternal = generateCardOffer(this.pool, drafted, this.rng, this.recentOfferSet());
     this.rememberOffer(this.offeredInternal);
     this.state.offeredCards = toDisplayOffer(this.offeredInternal);
     player.mulligan.fullUsed = true;
@@ -339,26 +323,35 @@ export class GameEngine {
     this.emit();
   }
 
-  private handleYearMulligan(playerId: string, playerName: string) {
+  private handleYearMulligan(playerId: string) {
     if (this.state.phase !== "drafting") return;
     if (this.currentPickerId() !== playerId) return;
     const player = this.state.players.find((p) => p.id === playerId);
-    if (!player || player.mulligan.yearUsed) return;
+    if (!player || player.mulligan.yearUsed || this.offeredInternal.length === 0) return;
 
-    const idx = this.offeredInternal.findIndex((c) => c.player_name === playerName);
-    if (idx < 0) return;
-
-    const current = this.offeredInternal[idx];
     const drafted = getDraftedPool(this.state.players);
-    const exclusions = getOfferExclusions(drafted, this.offeredInternal, current.id);
-    const replacement = findAlternateSeason(this.pool, playerName, exclusions, this.rng);
-    if (!replacement) return;
+    const nextOffer = [...this.offeredInternal];
+    const excludeIds = new Set(getOfferExclusions(drafted, this.offeredInternal).ids);
+    let changed = 0;
 
-    this.offeredInternal[idx] = replacement;
+    for (let idx = 0; idx < nextOffer.length; idx++) {
+      const current = nextOffer[idx];
+      const replacement = findAlternateSeason(this.pool, current.player_name, excludeIds, this.rng);
+      if (!replacement) continue;
+
+      excludeIds.delete(current.id);
+      excludeIds.add(replacement.id);
+      nextOffer[idx] = replacement;
+      changed += 1;
+    }
+
+    if (changed === 0) return;
+
+    this.offeredInternal = nextOffer;
     this.state.offeredCards = toDisplayOffer(this.offeredInternal);
     player.mulligan.yearUsed = true;
     this.refreshOfferTimer();
-    this.pushFeed(`${player.name} year-mulliganed ${playerName} in the offer.`);
+    this.pushFeed(`${player.name} rerolled every season in the offer.`);
     this.emit();
   }
 

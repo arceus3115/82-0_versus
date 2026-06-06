@@ -8,11 +8,11 @@ Real-time, lobby-based multiplayer web game: snake draft of NBA player-seasons, 
 
 GitHub Pages serves **static files only** — no Node, no servers, no secrets.
 
-| Stage | What happens |
-|-------|----------------|
-| **Build / CI** | `npm run data:build` downloads the [Kaggle dataset](https://www.kaggle.com/datasets/eoinamoore/historical-nba-data-and-player-box-scores) via its public API URL, aggregates full-history player-seasons (~9.5k), writes `public/data/players.json` |
-| **Deploy** | Vite copies `public/data/` into `dist/data/` |
-| **Runtime (browser)** | App `fetch`es `/data/players.json` from the same origin — works on GitHub Pages |
+| Stage                 | What happens                                                                                                                                                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Build / CI**        | `npm run data:build` downloads the [Kaggle dataset](https://www.kaggle.com/datasets/eoinamoore/historical-nba-data-and-player-box-scores) via its public API URL, aggregates full-history player-seasons (~9.5k), writes `public/data/players.json` |
+| **Deploy**            | Vite copies `public/data/` into `dist/data/`                                                                                                                                                                                                        |
+| **Runtime (browser)** | App `fetch`es `/data/players.json` from the same origin — works on GitHub Pages                                                                                                                                                                     |
 
 The raw Kaggle zip is ~450MB of game logs. Aggregating that in a browser tab would be slow and unreliable. The build step is automatic (not a manual download); you only run it when refreshing data.
 
@@ -24,6 +24,18 @@ The raw Kaggle zip is ~450MB of game logs. Aggregating that in a browser tab wou
 npm install
 npm run dev
 ```
+
+### Code checks
+
+```bash
+npm run check      # typecheck + lint + format check
+npm run lint:fix   # auto-fix ESLint issues
+npm run format     # auto-format with Prettier
+```
+
+**Pre-commit** (via Husky): runs `typecheck` and `lint-staged` on staged files before each commit.
+
+CI (`.github/workflows/ci.yml`) runs the same checks on pull requests and pushes to `main`.
 
 ### Local (recommended for dev)
 
@@ -90,9 +102,9 @@ If you previously used branch-based Pages:
 
 ## Architecture
 
-| Layer | Role |
-|-------|------|
+| Layer                       | Role                                                         |
+| --------------------------- | ------------------------------------------------------------ |
 | `scripts/build-players.mjs` | Download + aggregate Kaggle CSV → `public/data/players.json` |
-| `src/game/playerPool.ts` | Runtime `fetch` of static JSON |
-| `src/game/` | Engine, draft, simulation |
-| `src/network/` | Local (BroadcastChannel) or PeerJS transport |
+| `src/game/playerPool.ts`    | Runtime `fetch` of static JSON                               |
+| `src/game/`                 | Engine, draft, simulation                                    |
+| `src/network/`              | Local (BroadcastChannel) or PeerJS transport                 |

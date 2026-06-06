@@ -13,18 +13,13 @@ type Screen = "home" | "game";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
-  const [nameInput, setNameInput] = useState("");
+  const [nameInput, setNameInput] = useState(() => localStorage.getItem(DISPLAY_NAME_KEY) ?? "");
   const [codeInput, setCodeInput] = useState("");
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>(
     import.meta.env.DEV ? "local" : "online",
   );
 
   const game = useGame();
-
-  useEffect(() => {
-    const saved = localStorage.getItem(DISPLAY_NAME_KEY);
-    if (saved) setNameInput(saved);
-  }, []);
 
   useEffect(() => {
     const trimmed = nameInput.trim();
@@ -72,8 +67,8 @@ export default function App() {
             <p className="eyebrow">Versus</p>
             <h1>Build a legend. Run the night.</h1>
             <p className="subcopy">
-              Two drafters. Five cards. One simulated showdown — hot streaks, cold
-              nights, and all the history in the pool.
+              Two drafters. Five cards. One simulated showdown — hot streaks, cold nights, and all
+              the history in the pool.
             </p>
           </section>
 
@@ -134,10 +129,7 @@ export default function App() {
               <button
                 className="btn btn-secondary btn-block"
                 disabled={
-                  game.connecting ||
-                  !game.dataReady ||
-                  !nameInput.trim() ||
-                  codeInput.length < 4
+                  game.connecting || !game.dataReady || !nameInput.trim() || codeInput.length < 4
                 }
                 onClick={handleJoin}
               >

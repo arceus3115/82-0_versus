@@ -268,7 +268,7 @@ async function build() {
     const TS_pct = row.fgaWeighted > 0 ? (row.tsWeighted / row.fgaWeighted) * 100 : 50;
     const netPer100 = row.minuteWeighted > 0 ? row.netWeighted / row.minuteWeighted : 0;
     const BPM = Math.max(-8, Math.min(15, netPer100 * 0.45));
-    const TOV_pct = row.MP > 0 ? (row.TOV / (row.MP / 48 * 100)) * 100 : 12;
+    const TOV_pct = row.MP > 0 ? (row.TOV / ((row.MP / 48) * 100)) * 100 : 12;
 
     const stats = {
       PTS: row.PTS / row.games,
@@ -310,12 +310,9 @@ async function build() {
   players.sort((a, b) => b.BPM - a.BPM || b.MP - a.MP);
   mkdirSync(dirname(OUT_PATH), { recursive: true });
 
-  await pipeline(
-    async function* () {
-      yield JSON.stringify(players);
-    },
-    createWriteStream(OUT_PATH),
-  );
+  await pipeline(async function* () {
+    yield JSON.stringify(players);
+  }, createWriteStream(OUT_PATH));
 
   console.log(`[data] wrote ${players.length} player-seasons → ${OUT_PATH}`);
 }

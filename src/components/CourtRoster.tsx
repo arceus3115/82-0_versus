@@ -12,13 +12,7 @@ interface Props {
   onSwap?: (fromIndex: number, toIndex: number) => void;
 }
 
-export function CourtRoster({
-  team,
-  title,
-  hint,
-  interactive = false,
-  onSwap,
-}: Props) {
+export function CourtRoster({ team, title, hint, interactive = false, onSwap }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const slots = Array.from({ length: 5 }, (_, i) => team[i] ?? null);
 
@@ -41,9 +35,7 @@ export function CourtRoster({
     <div className="court-roster">
       {title && <h4 className="court-roster__title">{title}</h4>}
       {(hint || interactive) && (
-        <p className="court-roster__hint">
-          {hint ?? "Tap two players to swap positions"}
-        </p>
+        <p className="court-roster__hint">{hint ?? "Tap two players to swap positions"}</p>
       )}
       <div className="court-roster__grid">
         {SLOT_LABELS.map((label, i) => {

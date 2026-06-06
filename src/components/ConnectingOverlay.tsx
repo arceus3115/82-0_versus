@@ -6,11 +6,7 @@ interface Props {
   statusMessage?: string;
 }
 
-export function ConnectingOverlay({
-  connectionMode,
-  phase = "connect",
-  statusMessage,
-}: Props) {
+export function ConnectingOverlay({ connectionMode, phase = "connect", statusMessage }: Props) {
   const isOnline = connectionMode === "online";
   const title = phase === "sync" ? "Syncing lobby" : "Connecting";
   const defaultDetail =

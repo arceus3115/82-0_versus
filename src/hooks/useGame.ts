@@ -172,7 +172,7 @@ export function useGame() {
   const startGame = () => send({ type: "start" });
   const pickCard = (cardId: string) => send({ type: "pick", cardId });
   const mulliganFull = () => send({ type: "mulligan_full" });
-  const mulliganYear = (playerName: string) => send({ type: "mulligan_year", playerName });
+  const mulliganYear = () => send({ type: "mulligan_year" });
   const confirmLineup = () => send({ type: "confirm" });
   const swapPositions = (fromIndex: number, toIndex: number) =>
     send({ type: "swap_positions", fromIndex, toIndex });

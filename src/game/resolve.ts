@@ -190,7 +190,7 @@ export function resolveMatch(players: LobbyPlayer[], rng: SeededRNG): MatchResul
 
   const topPTS = scores[0]?.rating ?? 0;
   const isTie = scores.length > 1 && scores[1].rating === topPTS;
-  const winnerId = isTie ? null : scores[0]?.playerId ?? null;
+  const winnerId = isTie ? null : (scores[0]?.playerId ?? null);
 
   const simulationDetails: TeamSimulationDetail[] = simulations.map((sim) => ({
     playerId: sim.statline.playerId,

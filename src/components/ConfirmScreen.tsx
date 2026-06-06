@@ -63,9 +63,7 @@ export function ConfirmScreen({ state, playerId, onConfirm, onSwap }: Props) {
             )}
           </>
         )}
-        {me?.confirmed && (
-          <p className="waiting-host">Waiting for opponent to lock in…</p>
-        )}
+        {me?.confirmed && <p className="waiting-host">Waiting for opponent to lock in…</p>}
       </div>
     </section>
   );

@@ -25,7 +25,10 @@ export function LobbyScreen({ state, playerId, isHost, onReady, onStart }: Props
         <ul className="player-list">
           {state.players.map((player) => (
             <li key={player.id} className={player.ready ? "ready" : ""}>
-              <span>{player.name}{player.isHost ? " (host)" : ""}</span>
+              <span>
+                {player.name}
+                {player.isHost ? " (host)" : ""}
+              </span>
               <span>{player.ready ? "Ready" : "Waiting"}</span>
             </li>
           ))}
@@ -44,9 +47,7 @@ export function LobbyScreen({ state, playerId, isHost, onReady, onStart }: Props
         </button>
       )}
 
-      {!isHost && me?.ready && (
-        <p className="waiting-host">Waiting for host to start…</p>
-      )}
+      {!isHost && me?.ready && <p className="waiting-host">Waiting for host to start…</p>}
     </section>
   );
 }

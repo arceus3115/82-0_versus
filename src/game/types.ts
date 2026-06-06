@@ -141,7 +141,7 @@ export type ClientMessage =
   | { type: "start" }
   | { type: "pick"; cardId: string }
   | { type: "mulligan_full" }
-  | { type: "mulligan_year"; playerName: string }
+  | { type: "mulligan_year" }
   | { type: "confirm" }
   | { type: "swap_positions"; fromIndex: number; toIndex: number }
   | { type: "play_again" };

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { LobbyState } from "../game/types";
 import { playTimerTick } from "../utils/tickSound";
 import { CourtRoster } from "./CourtRoster";
+import { MulliganBar } from "./MulliganBar";
 import { Statline } from "./Statline";
 
 interface Props {
@@ -9,7 +10,7 @@ interface Props {
   playerId: string | null;
   onPick: (cardId: string) => void;
   onMulliganFull: () => void;
-  onMulliganYear: (playerName: string) => void;
+  onMulliganYear: () => void;
   onSwap: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -22,7 +23,6 @@ export function DraftScreen({
   onSwap,
 }: Props) {
   const [secondsLeft, setSecondsLeft] = useState(0);
-  const [yearTarget, setYearTarget] = useState("");
   const lastBeepSecond = useRef(-1);
 
   const currentPickerId = state.draftOrder[state.currentPickIndex];
@@ -32,11 +32,6 @@ export function DraftScreen({
   const me = state.players.find((p) => p.id === playerId);
   const pickNumber = state.currentPickIndex + 1;
   const draftLabel = state.players.length === 2 ? "Alternating" : "Snake";
-
-  useEffect(() => {
-    const first = state.offeredCards[0]?.player_name ?? "";
-    setYearTarget(first);
-  }, [state.offeredCards, state.currentPickIndex]);
 
   useEffect(() => {
     if (!state.pickDeadline) return;
@@ -79,7 +74,9 @@ export function DraftScreen({
           <ul className="pick-history">
             {state.pickHistory.slice(1, 5).map((pick) => (
               <li key={`${pick.pickNumber}-${pick.card.id}`}>
-                <span>#{pick.pickNumber} {pick.drafterName}</span>
+                <span>
+                  #{pick.pickNumber} {pick.drafterName}
+                </span>
                 <span>{pick.card.player_name}</span>
               </li>
             ))}
@@ -102,9 +99,13 @@ export function DraftScreen({
       </aside>
 
       <section className="surface-panel draft-panel--main">
-        <header className={`surface-panel__header pick-banner ${isMyTurn ? "pick-banner--you" : "pick-banner--wait"}`}>
+        <header
+          className={`surface-panel__header pick-banner ${isMyTurn ? "pick-banner--you" : "pick-banner--wait"}`}
+        >
           <div className="pick-banner__text">
-            <p className="eyebrow">{draftLabel} · Pick {pickNumber}/{state.totalDraftPicks}</p>
+            <p className="eyebrow">
+              {draftLabel} · Pick {pickNumber}/{state.totalDraftPicks}
+            </p>
             <h2>{isMyTurn ? "You're on the clock" : `Waiting on ${picker?.name}`}</h2>
           </div>
           <div className={`timer-badge ${secondsLeft <= 5 ? "timer-badge--urgent" : ""}`}>
@@ -113,38 +114,12 @@ export function DraftScreen({
         </header>
 
         {isMyTurn && state.offeredCards.length > 0 && me && (
-          <div className="mulligan-bar">
-            <p className="mulligan-label">Mulligan choices before you pick</p>
-            <div className="mulligan-controls">
-              <button
-                className="btn btn-secondary btn-sm"
-                disabled={me.mulligan.fullUsed}
-                onClick={onMulliganFull}
-              >
-                Reroll all 5 ({me.mulligan.fullUsed ? "used" : "1 left"})
-              </button>
-              <div className="mulligan-year">
-                <select
-                  value={yearTarget}
-                  disabled={me.mulligan.yearUsed}
-                  onChange={(e) => setYearTarget(e.target.value)}
-                >
-                  {state.offeredCards.map((card) => (
-                    <option key={card.id} value={card.player_name}>
-                      {card.player_name} ({card.season})
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  disabled={me.mulligan.yearUsed || !yearTarget}
-                  onClick={() => onMulliganYear(yearTarget)}
-                >
-                  Reroll year ({me.mulligan.yearUsed ? "used" : "1 left"})
-                </button>
-              </div>
-            </div>
-          </div>
+          <MulliganBar
+            fullUsed={me.mulligan.fullUsed}
+            yearUsed={me.mulligan.yearUsed}
+            onMulliganFull={onMulliganFull}
+            onMulliganYear={onMulliganYear}
+          />
         )}
 
         <div className={`offer-grid ${!isMyTurn ? "offer-grid--disabled" : ""}`}>

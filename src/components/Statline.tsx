@@ -1,12 +1,6 @@
 import type { DisplayCard } from "../game/types";
 
-export function Statline({
-  card,
-  compact = false,
-}: {
-  card: DisplayCard;
-  compact?: boolean;
-}) {
+export function Statline({ card, compact = false }: { card: DisplayCard; compact?: boolean }) {
   return (
     <article className={`statline ${compact ? "statline--compact" : ""}`}>
       <header className="statline-header">
@@ -24,11 +18,26 @@ export function Statline({
         </span>
       </header>
       <dl className="stats-grid">
-        <div><dt>PTS</dt><dd>{card.PTS}</dd></div>
-        <div><dt>AST</dt><dd>{card.AST}</dd></div>
-        <div><dt>TRB</dt><dd>{card.TRB}</dd></div>
-        <div><dt>STL</dt><dd>{card.STL}</dd></div>
-        <div><dt>BLK</dt><dd>{card.BLK}</dd></div>
+        <div>
+          <dt>PTS</dt>
+          <dd>{card.PTS}</dd>
+        </div>
+        <div>
+          <dt>AST</dt>
+          <dd>{card.AST}</dd>
+        </div>
+        <div>
+          <dt>TRB</dt>
+          <dd>{card.TRB}</dd>
+        </div>
+        <div>
+          <dt>STL</dt>
+          <dd>{card.STL}</dd>
+        </div>
+        <div>
+          <dt>BLK</dt>
+          <dd>{card.BLK}</dd>
+        </div>
       </dl>
     </article>
   );

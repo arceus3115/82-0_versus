@@ -84,11 +84,7 @@ export function generateCardOffer(
   recentlyOffered: Set<string> = new Set(),
 ): InternalCard[] {
   const available = pool
-    .filter(
-      (p) =>
-        !drafted.ids.has(p.id) &&
-        !drafted.names.has(normalizePlayerName(p.player_name)),
-    )
+    .filter((p) => !drafted.ids.has(p.id) && !drafted.names.has(normalizePlayerName(p.player_name)))
     .map(toInternalCard);
 
   if (available.length <= 5) {
@@ -128,14 +124,14 @@ export function toDisplayOffer(cards: InternalCard[]): DisplayCard[] {
 export function findAlternateSeason(
   pool: PlayerSeasonRaw[],
   playerName: string,
-  drafted: DraftedPool,
+  excludeIds: Set<string>,
   rng: SeededRNG,
 ): InternalCard | null {
   const options = pool
     .filter(
       (p) =>
         normalizePlayerName(p.player_name) === normalizePlayerName(playerName) &&
-        !drafted.ids.has(p.id),
+        !excludeIds.has(p.id),
     )
     .map(toInternalCard);
   if (options.length === 0) return null;

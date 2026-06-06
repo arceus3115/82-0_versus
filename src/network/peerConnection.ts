@@ -147,6 +147,7 @@ export class PeerConnection implements GameTransport {
             import.meta.env.DEV
               ? `${err instanceof Error ? err.message : String(err)} Start npm run dev:online.`
               : `Signaling server is still waking up. Try Create lobby again in a few seconds.`,
+            { cause: err },
           );
         }
       }
@@ -244,11 +245,7 @@ export class PeerConnection implements GameTransport {
     conn.on("error", (err) => this.handlers.onError(String(err)));
   }
 
-  private async initGuestPeer(
-    playerId: string,
-    code: string,
-    guestName: string,
-  ): Promise<void> {
+  private async initGuestPeer(playerId: string, code: string, guestName: string): Promise<void> {
     const { config, options } = await this.peerOptions();
     const { attemptMs, maxAttempts } = this.timeouts;
     const hostPeerId = `${PEER_PREFIX}${code}`;
@@ -275,6 +272,7 @@ export class PeerConnection implements GameTransport {
             msg.includes("Timed out")
               ? `Could not join in time. Confirm the code "${code}" and that the host is still online.`
               : msg,
+            { cause: err },
           );
         }
       }

@@ -32,11 +32,11 @@ Replace the hostname if your Render service name differs.
 
 **Option B — GitHub Actions secrets** (baked into the JS bundle at build time)
 
-| Secret | Example value |
-|--------|----------------|
-| `VITE_PEER_HOST` | `versus-peer-server.onrender.com` |
-| `VITE_PEER_PORT` | `443` |
-| `VITE_PEER_SECURE` | `true` |
+| Secret             | Example value                     |
+| ------------------ | --------------------------------- |
+| `VITE_PEER_HOST`   | `versus-peer-server.onrender.com` |
+| `VITE_PEER_PORT`   | `443`                             |
+| `VITE_PEER_SECURE` | `true`                            |
 
 Do **not** add an empty `VITE_PEER_PATH` secret — omit it entirely (defaults to `/`). An empty value breaks the WebSocket URL.
 
