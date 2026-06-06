@@ -27,9 +27,16 @@ Optional: `VITE_PEER_PATH` = `/` (default)
 
 ## 3. Deploy the game (GitHub Pages)
 
-Push to `main`, or run the **Deploy GitHub Pages** workflow manually.
+Deployment is **from `main` only** via GitHub Actions — not the `gh-pages` branch.
 
-Ensure **Settings → Pages → Source** is **GitHub Actions**.
+1. **Settings → Pages → Build and deployment → Source:** **GitHub Actions**
+2. Push to `main`, or run **Deploy GitHub Pages** workflow manually.
+
+If an old `gh-pages` branch exists from a previous setup, delete it after switching the source:
+
+```bash
+git push origin --delete gh-pages
+```
 
 ## 4. Play
 

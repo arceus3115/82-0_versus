@@ -67,26 +67,26 @@ npm run data:build
 
 ## Deploy to GitHub Pages
 
-### Option A — GitHub Actions (recommended)
+Deploys from **`main`** via GitHub Actions (no `gh-pages` branch).
 
-Push to `main`. The workflow in `.github/workflows/deploy-pages.yml`:
+1. **Settings → Pages → Build and deployment → Source:** **GitHub Actions**
+2. Add Actions secrets for online mode (see [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md))
+3. Push to `main` (or run **Deploy GitHub Pages** workflow manually)
 
-1. Runs `data:build` (pulls Kaggle data in CI)
-2. Builds the Vite app
-3. Deploys to GitHub Pages
+The workflow in `.github/workflows/deploy-pages.yml` runs `data:build`, builds the Vite app, and publishes `dist/`.
 
-Enable Pages in repo settings: **Source → GitHub Actions**.
+Pages `base` is derived from your GitHub repo name in CI. For local production builds, set `PAGES_BASE` if needed.
 
-### Option B — Manual
+### Remove old `gh-pages` branch (one-time)
 
-```bash
-GITHUB_PAGES=true npm run build
-npm run deploy
-```
+If you previously used branch-based Pages:
 
-Set Pages source to the `gh-pages` branch.
-
-Pages `base` is derived from your GitHub repo name in CI. For local deploys, set `PAGES_BASE` if needed.
+1. Confirm **Source** is **GitHub Actions** (not “Deploy from a branch”).
+2. Delete the orphan branch:
+   ```bash
+   git push origin --delete gh-pages
+   ```
+3. On GitHub: **Branches** → delete `gh-pages` if it still appears.
 
 ## Architecture
 
