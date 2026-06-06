@@ -1,4 +1,24 @@
-export type GamePhase = "waiting" | "drafting" | "confirming" | "finished";
+export type GamePhase = "waiting" | "drafting" | "confirming" | "tournament" | "finished";
+
+export type BracketMatchStatus = "pending" | "ready" | "complete" | "bye";
+
+export interface BracketMatch {
+  id: string;
+  round: number;
+  slot: number;
+  playerAId: string | null;
+  playerBId: string | null;
+  winnerId: string | null;
+  status: BracketMatchStatus;
+  result: MatchResult | null;
+}
+
+export interface TournamentState {
+  seeds: string[];
+  matches: BracketMatch[];
+  currentMatchId: string | null;
+  championId: string | null;
+}
 
 export type VolatilityTier = "Stable" | "Volatile" | "Risky";
 
@@ -132,6 +152,7 @@ export interface LobbyState {
   pickHistory: DraftPickRecord[];
   winnerId: string | null;
   result: MatchResult | null;
+  tournament: TournamentState | null;
   feed: string[];
 }
 

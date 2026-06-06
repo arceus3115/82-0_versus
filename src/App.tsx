@@ -4,6 +4,7 @@ import { ConnectingOverlay } from "./components/ConnectingOverlay";
 import { DraftScreen } from "./components/DraftScreen";
 import { LobbyScreen } from "./components/LobbyScreen";
 import { ResultsScreen } from "./components/ResultsScreen";
+import { TournamentScreen } from "./components/TournamentScreen";
 import { useGame } from "./hooks/useGame";
 import type { ConnectionMode } from "./network/connection";
 
@@ -67,8 +68,8 @@ export default function App() {
             <p className="eyebrow">Versus</p>
             <h1>Build a legend. Run the night.</h1>
             <p className="subcopy">
-              Two drafters. Five cards. One simulated showdown — hot streaks, cold nights, and all
-              the history in the pool.
+              Up to six drafters. Five cards each. Snake draft, then a single-elimination bracket —
+              hot streaks, cold nights, and all the history in the pool.
             </p>
           </section>
 
@@ -181,6 +182,7 @@ export default function App() {
             onSwap={game.swapPositions}
           />
         )}
+        {game.state.phase === "tournament" && <TournamentScreen state={game.state} />}
         {game.state.phase === "finished" && (
           <ResultsScreen state={game.state} onPlayAgain={game.playAgain} />
         )}

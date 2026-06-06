@@ -1,9 +1,18 @@
 import {
+  advanceWinner,
+  applyByeAdvancement,
+  buildBracket,
+  getMatch,
+  getNextResolvableMatch,
+  higherSeedWins,
+} from "./bracket";
+import {
   buildDraftOrder,
   generateCardOffer,
   findAlternateSeason,
   getDraftedPool,
-  LOBBY_PLAYER_COUNT,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
   normalizePlayerName,
   PICK_TIMER_MS,
   PICKS_PER_PLAYER,
@@ -53,6 +62,7 @@ export class GameEngine {
   private offeredInternal: InternalCard[] = [];
   private recentOfferNames: string[] = [];
   private pickTimer: ReturnType<typeof setTimeout> | null = null;
+  private tournamentTimer: ReturnType<typeof setTimeout> | null = null;
   private onChange: (state: LobbyState) => void;
 
   constructor(
@@ -80,6 +90,7 @@ export class GameEngine {
       pickHistory: [],
       winnerId: null,
       result: null,
+      tournament: null,
       feed: [],
     };
   }
@@ -111,6 +122,13 @@ export class GameEngine {
       this.recentOfferNames.push(normalizePlayerName(card.player_name));
     }
     this.recentOfferNames = this.recentOfferNames.slice(-80);
+  }
+
+  private clearTournamentTimer() {
+    if (this.tournamentTimer) {
+      clearTimeout(this.tournamentTimer);
+      this.tournamentTimer = null;
+    }
   }
 
   private clearPickTimer() {
@@ -157,7 +175,7 @@ export class GameEngine {
     this.state.lastPick = null;
     this.state.pickHistory = [];
     this.state.phase = "drafting";
-    const label = ids.length === 2 ? "alternating picks" : "snake draft";
+    const label = "snake draft";
     this.pushFeed(`Draft started — ${label}.`);
     this.offerCardsForCurrentPick();
   }
@@ -170,36 +188,102 @@ export class GameEngine {
     for (const player of this.state.players) {
       player.confirmed = false;
     }
-    this.pushFeed("Draft complete — confirm your lineup to finish.");
+    this.pushFeed("Draft complete — confirm your lineup to start the bracket.");
+    this.emit();
+  }
+
+  private beginTournament() {
+    this.mixRngEntropy();
+    const seeds = this.state.players.map((p) => p.id);
+    this.state.tournament = buildBracket(seeds, this.rng);
+    applyByeAdvancement(this.state.tournament);
+    this.state.phase = "tournament";
+    this.state.result = null;
+    this.state.winnerId = null;
+    this.pushFeed("Lineups locked — single-elimination bracket begins.");
+    this.emit();
+    this.resolveNextBracketStep();
+  }
+
+  private resolveBracketMatch(matchId: string) {
+    const tournament = this.state.tournament;
+    if (!tournament) return;
+
+    const match = getMatch(tournament, matchId);
+    if (!match || match.status !== "ready" || !match.playerAId || !match.playerBId) return;
+
+    const playerA = this.state.players.find((p) => p.id === match.playerAId);
+    const playerB = this.state.players.find((p) => p.id === match.playerBId);
+    if (!playerA || !playerB) return;
+
+    let result = resolveMatch([playerA, playerB], this.rng);
+    if (result.isTie) {
+      this.mixRngEntropy();
+      result = resolveMatch([playerA, playerB], this.rng);
+    }
+
+    let winnerId = result.winnerId;
+    if (!winnerId || result.isTie) {
+      winnerId = higherSeedWins(tournament.seeds, playerA.id, playerB.id);
+      result = { ...result, winnerId, isTie: false };
+    }
+
+    match.result = result;
+    tournament.currentMatchId = matchId;
+    this.state.result = result;
+
+    const loserId = winnerId === playerA.id ? playerB.id : playerA.id;
+    const winner = this.state.players.find((p) => p.id === winnerId);
+    const loser = this.state.players.find((p) => p.id === loserId);
+    const winnerPts = result.predictedStatlines.find((l) => l.playerId === winnerId)?.PTS ?? "—";
+    const loserPts = result.predictedStatlines.find((l) => l.playerId === loserId)?.PTS ?? "—";
+    this.pushFeed(`${winner?.name} defeats ${loser?.name} — ${winnerPts}–${loserPts} team PTS.`);
+
+    advanceWinner(tournament, matchId, winnerId);
+    this.emit();
+  }
+
+  private resolveNextBracketStep() {
+    const tournament = this.state.tournament;
+    if (!tournament) return;
+
+    const next = getNextResolvableMatch(tournament);
+    if (!next) {
+      if (tournament.championId) {
+        this.tournamentTimer = setTimeout(() => this.finishTournament(), 1500);
+      }
+      return;
+    }
+
+    if (next.status === "bye" && next.winnerId) {
+      applyByeAdvancement(tournament);
+      this.emit();
+      this.tournamentTimer = setTimeout(() => this.resolveNextBracketStep(), 400);
+      return;
+    }
+
+    this.resolveBracketMatch(next.id);
+    this.emit();
+    this.tournamentTimer = setTimeout(() => this.resolveNextBracketStep(), 1200);
+  }
+
+  private finishTournament() {
+    const championId = this.state.tournament?.championId ?? null;
+    this.state.winnerId = championId;
+    this.state.phase = "finished";
+    const champion = this.state.players.find((p) => p.id === championId);
+    this.pushFeed(`${champion?.name ?? "Unknown"} wins the tournament!`);
     this.emit();
   }
 
   private tryFinish() {
     if (!this.state.players.every((p) => p.confirmed)) return;
-    const result = resolveMatch(this.state.players, this.rng);
-    this.state.result = result;
-    this.state.winnerId = result.winnerId;
-    this.state.phase = "finished";
-
-    if (result.isTie) {
-      this.pushFeed(`Tie game — both teams at ${result.scores[0]?.rating ?? "—"} points.`);
-    } else {
-      const winner = this.state.players.find((p) => p.id === result.winnerId);
-      const pts = result.predictedStatlines.find((l) => l.playerId === result.winnerId)?.PTS ?? "—";
-      this.pushFeed(`${winner?.name} wins — ${pts} team points.`);
-    }
-
-    for (const detail of result.simulationDetails) {
-      const story = detail.playerLogs.map((log) => `${log.player_name}: ${log.label}`).join(", ");
-      this.pushFeed(`${detail.teamName} — ${story}`);
-    }
-
-    this.emit();
+    this.beginTournament();
   }
 
   addPlayer(id: string, name: string) {
     if (this.state.phase !== "waiting") return false;
-    if (this.state.players.length >= LOBBY_PLAYER_COUNT) return false;
+    if (this.state.players.length >= MAX_PLAYERS) return false;
     if (this.state.players.some((p) => p.id === id)) return false;
     this.state.players.push(createPlayer(id, name, false));
     this.pushFeed(`${name} joined the lobby.`);
@@ -254,7 +338,8 @@ export class GameEngine {
 
   startGame() {
     if (this.state.phase !== "waiting") return;
-    if (this.state.players.length !== LOBBY_PLAYER_COUNT) return;
+    const count = this.state.players.length;
+    if (count < MIN_PLAYERS || count > MAX_PLAYERS) return;
     if (!this.state.players.every((p) => p.ready)) return;
     this.beginDraft();
   }
@@ -414,12 +499,15 @@ export class GameEngine {
     this.state.pickHistory = [];
     this.state.winnerId = null;
     this.state.result = null;
+    this.state.tournament = null;
     this.clearPickTimer();
+    this.clearTournamentTimer();
     this.pushFeed("New game — ready up to draft again.");
     this.emit();
   }
 
   destroy() {
     this.clearPickTimer();
+    this.clearTournamentTimer();
   }
 }

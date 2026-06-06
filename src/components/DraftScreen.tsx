@@ -28,10 +28,9 @@ export function DraftScreen({
   const currentPickerId = state.draftOrder[state.currentPickIndex];
   const isMyTurn = currentPickerId === playerId;
   const picker = state.players.find((p) => p.id === currentPickerId);
-  const opponent = state.players.find((p) => p.id !== playerId);
+  const others = state.players.filter((p) => p.id !== playerId);
   const me = state.players.find((p) => p.id === playerId);
   const pickNumber = state.currentPickIndex + 1;
-  const draftLabel = state.players.length === 2 ? "Alternating" : "Snake";
 
   useEffect(() => {
     if (!state.pickDeadline) return;
@@ -81,18 +80,23 @@ export function DraftScreen({
               </li>
             ))}
           </ul>
-          {opponent && (
+          {others.length > 0 && (
             <div className="opponent-block">
-              <h4 className="panel-subtitle">{opponent.name}&apos;s picks</h4>
-              <ul className="opponent-picks">
-                {opponent.team.map((card) => (
-                  <li key={card.id}>
-                    <span className="team-ticker team-ticker--inline">{card.team_ticker}</span>
-                    {card.player_name}
-                  </li>
-                ))}
-                {opponent.team.length === 0 && <li className="panel-empty">Waiting…</li>}
-              </ul>
+              <h4 className="panel-subtitle">Other drafters</h4>
+              {others.map((other) => (
+                <div key={other.id} className="opponent-group">
+                  <h5 className="opponent-group__name">{other.name}</h5>
+                  <ul className="opponent-picks">
+                    {other.team.map((card) => (
+                      <li key={card.id}>
+                        <span className="team-ticker team-ticker--inline">{card.team_ticker}</span>
+                        {card.player_name}
+                      </li>
+                    ))}
+                    {other.team.length === 0 && <li className="panel-empty">Waiting…</li>}
+                  </ul>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -104,7 +108,7 @@ export function DraftScreen({
         >
           <div className="pick-banner__text">
             <p className="eyebrow">
-              {draftLabel} · Pick {pickNumber}/{state.totalDraftPicks}
+              Snake · Pick {pickNumber}/{state.totalDraftPicks}
             </p>
             <h2>{isMyTurn ? "You're on the clock" : `Waiting on ${picker?.name}`}</h2>
           </div>
