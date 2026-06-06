@@ -28,6 +28,11 @@ jobs:
       - run: npm ci
 
       - name: Fetch Kaggle data and build site
+        env:
+          VITE_PEER_HOST: ${{ secrets.VITE_PEER_HOST }}
+          VITE_PEER_PORT: ${{ secrets.VITE_PEER_PORT }}
+          VITE_PEER_PATH: ${{ secrets.VITE_PEER_PATH }}
+          VITE_PEER_SECURE: ${{ secrets.VITE_PEER_SECURE }}
         run: GITHUB_PAGES=true npm run build
 
       - uses: actions/upload-pages-artifact@v3

@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: versus-peer-server
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: node scripts/peer-server.mjs
+    envVars:
+      - key: PEER_PROXIED
+        value: "true"
+      - key: NODE_VERSION
+        value: "22"

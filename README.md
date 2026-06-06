@@ -31,6 +31,28 @@ npm run dev
 2. Tab 1: Create lobby → copy code
 3. Tab 2: Join with code
 
+### Online mode (two devices / browsers)
+
+Online uses **PeerJS** and needs a small **signaling server** (GitHub Pages alone cannot host it).
+
+**Local online test:**
+
+```bash
+npm run dev:online
+```
+
+Starts the Peer server on port 9000 and Vite. Both tabs: **Online (PeerJS)**.
+
+**Production (GitHub Pages + Render):**
+
+Step-by-step: **[docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md)**
+
+1. Deploy signaling server on Render (`render.yaml` blueprint).
+2. Add GitHub Actions secrets: `VITE_PEER_HOST`, `VITE_PEER_PORT` (`443`), `VITE_PEER_SECURE` (`true`).
+3. Push to `main` to rebuild GitHub Pages.
+
+Players see a **Connecting** screen while the link is made (including Render cold starts).
+
 ### Refresh player data from Kaggle
 
 ```bash

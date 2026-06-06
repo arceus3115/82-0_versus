@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ConfirmScreen } from "./components/ConfirmScreen";
+import { ConnectingOverlay } from "./components/ConnectingOverlay";
 import { DraftScreen } from "./components/DraftScreen";
 import { LobbyScreen } from "./components/LobbyScreen";
 import { ResultsScreen } from "./components/ResultsScreen";
@@ -44,19 +45,16 @@ export default function App() {
     if (ok) enterGame();
   };
 
-  if (screen === "game" && !game.state) {
+  const activeConnectionMode = game.connecting ? connectionMode : game.connectionMode;
+  const showConnecting = game.connecting;
+  const showSyncing = screen === "game" && !game.state && !game.connecting;
+
+  if (showConnecting || showSyncing) {
     return (
-      <div className="app">
-        <header className="topbar">
-          <span className="logo">VERSUS</span>
-        </header>
-        <main className="home">
-          <section className="hero-card home-hero">
-            <p className="eyebrow">Connecting</p>
-            <h1>Syncing lobby state…</h1>
-          </section>
-        </main>
-      </div>
+      <ConnectingOverlay
+        connectionMode={activeConnectionMode}
+        phase={showSyncing ? "sync" : "connect"}
+      />
     );
   }
 

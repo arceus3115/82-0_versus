@@ -98,6 +98,10 @@ export function useGame() {
           setIsHost(host);
         },
         onError: setError,
+        onPeerConnected: () => {
+          const engine = engineRef.current;
+          if (engine) syncState(engine.getState());
+        },
         onPeerDisconnected: (id) => engineRef.current?.removePlayer(id),
       });
       connectionRef.current = conn;
@@ -108,7 +112,9 @@ export function useGame() {
       engine.state.code = code;
       setPlayerId(hostId);
       setIsHost(true);
-      setState(engine.getState());
+      const initial = engine.getState();
+      setState(initial);
+      syncState(initial);
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create lobby");

@@ -7,6 +7,7 @@ export interface GameTransportHandlers {
   onState: (state: LobbyState) => void;
   onAssigned: (playerId: string, isHost: boolean) => void;
   onError: (message: string) => void;
+  onPeerConnected?: (peerId: string) => void;
   onPeerDisconnected?: (peerId: string) => void;
 }
 
