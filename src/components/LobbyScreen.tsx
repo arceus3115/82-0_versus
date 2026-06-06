@@ -1,23 +1,23 @@
-import type { GameMode, LobbyState } from "../game/types";
+import type { LobbyState } from "../game/types";
 
 interface Props {
   state: LobbyState;
   playerId: string | null;
   isHost: boolean;
   onReady: () => void;
-  onStart: (mode: GameMode) => void;
+  onStart: () => void;
 }
 
 export function LobbyScreen({ state, playerId, isHost, onReady, onStart }: Props) {
   const me = state.players.find((p) => p.id === playerId);
-  const allReady = state.players.length >= 2 && state.players.every((p) => p.ready);
+  const allReady = state.players.length === 2 && state.players.every((p) => p.ready);
 
   return (
     <section className="screen lobby-screen">
       <div className="hero-card">
         <p className="eyebrow">Join code</p>
         <h1 className="join-code">{state.code}</h1>
-        <p className="subcopy">Share this code. Need 2–12 players.</p>
+        <p className="subcopy">Share this code. Exactly 2 players.</p>
       </div>
 
       <div className="panel">
@@ -39,25 +39,9 @@ export function LobbyScreen({ state, playerId, isHost, onReady, onStart }: Props
       )}
 
       {isHost && (
-        <div className="panel">
-          <h2>Game mode</h2>
-          <div className="mode-buttons">
-            <button
-              className="btn btn-secondary"
-              disabled={!allReady}
-              onClick={() => onStart("elimination")}
-            >
-              Last Man Standing
-            </button>
-            <button
-              className="btn btn-primary"
-              disabled={!allReady}
-              onClick={() => onStart("fixed_season")}
-            >
-              Fixed Season (18 rounds)
-            </button>
-          </div>
-        </div>
+        <button className="btn btn-primary btn-large" disabled={!allReady} onClick={onStart}>
+          Start draft
+        </button>
       )}
 
       {!isHost && me?.ready && (

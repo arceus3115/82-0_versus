@@ -2,16 +2,21 @@
 
 Real-time, lobby-based multiplayer web game: snake draft of NBA player-seasons, mulligans, then synchronized streak simulation.
 
-**Hosting:** static SPA on GitHub Pages. Multiplayer uses PeerJS (one player hosts authoritative game state over WebRTC data channels).
+**Hosting:** static SPA on GitHub Pages. Multiplayer uses PeerJS (host-authoritative state) or local `BroadcastChannel` for two-tab testing.
 
-## Features
+## Why player data isn't fetched live from Kaggle in the browser
 
-- Lobby with join code, ready status, 2–12 players
-- Snake draft with 5-card offers per pick (15s timer + auto-pick)
-- Full mulligan + year mulligan (once each) after draft
-- Synchronized simulation rounds with seeded RNG
-- Modes: Last Man Standing or Fixed Season (18 rounds)
-- Hidden μ/σ/τ model; UI shows statlines + Stable/Volatile/Risky only
+GitHub Pages serves **static files only** — no Node, no servers, no secrets.
+
+| Stage | What happens |
+|-------|----------------|
+| **Build / CI** | `npm run data:build` downloads the [Kaggle dataset](https://www.kaggle.com/datasets/eoinamoore/historical-nba-data-and-player-box-scores) via its public API URL, aggregates full-history player-seasons (~9.5k), writes `public/data/players.json` |
+| **Deploy** | Vite copies `public/data/` into `dist/data/` |
+| **Runtime (browser)** | App `fetch`es `/data/players.json` from the same origin — works on GitHub Pages |
+
+The raw Kaggle zip is ~450MB of game logs. Aggregating that in a browser tab would be slow and unreliable. The build step is automatic (not a manual download); you only run it when refreshing data.
+
+`public/data/players.json` is **committed** so `npm run dev` works offline without re-downloading.
 
 ## Local dev
 
@@ -20,33 +25,52 @@ npm install
 npm run dev
 ```
 
-Open two browser tabs/windows to test host + guest.
+### Local testing (recommended)
+
+1. **Connection mode → Local testing**
+2. Tab 1: Create lobby → copy code
+3. Tab 2: Join with code
+
+### Refresh player data from Kaggle
+
+```bash
+npm run data:build
+```
+
+Uses `.cache/` after the first run (fast). Do **not** append shell comments to npm scripts — run exactly:
+
+```bash
+npm run data:build
+```
 
 ## Deploy to GitHub Pages
 
+### Option A — GitHub Actions (recommended)
+
+Push to `main`. The workflow in `.github/workflows/deploy-pages.yml`:
+
+1. Runs `data:build` (pulls Kaggle data in CI)
+2. Builds the Vite app
+3. Deploys to GitHub Pages
+
+Enable Pages in repo settings: **Source → GitHub Actions**.
+
+### Option B — Manual
+
 ```bash
+GITHUB_PAGES=true npm run build
 npm run deploy
 ```
 
-Then enable GitHub Pages for this repo (branch `gh-pages`, root `/`).
+Set Pages source to the `gh-pages` branch.
 
-The build uses base path `/82-0_versus/` — rename in `vite.config.ts` if your repo name differs.
+Update `base` in `vite.config.ts` if your repo name isn't `82-0_versus`.
 
 ## Architecture
 
 | Layer | Role |
 |-------|------|
-| `src/game/` | Deterministic engine: model, draft, simulation, seeded RNG |
-| `src/network/` | PeerJS host/guest connections |
-| `src/components/` | Lobby, draft, mulligan, simulation, results UI |
-
-The **host** runs `GameEngine` and broadcasts `LobbyState` to guests after every action.
-
-## Data
-
-`src/data/players.json` — 119 player-season rows (Basketball Reference–style fields: PTS, AST, TRB, STL, BLK, MP, BPM, TS%, TOV%).
-
-## Notes
-
-- PeerJS uses the public signaling server (`0.peerjs.com`). For production, consider self-hosting PeerServer.
-- Sessions are ephemeral; no persistence in v1.
+| `scripts/build-players.mjs` | Download + aggregate Kaggle CSV → `public/data/players.json` |
+| `src/game/playerPool.ts` | Runtime `fetch` of static JSON |
+| `src/game/` | Engine, draft, simulation |
+| `src/network/` | Local (BroadcastChannel) or PeerJS transport |

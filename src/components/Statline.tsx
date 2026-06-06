@@ -1,28 +1,35 @@
 import type { DisplayCard } from "../game/types";
 
-const tierClass: Record<string, string> = {
-  Stable: "tier-stable",
-  Volatile: "tier-volatile",
-  Risky: "tier-risky",
-};
-
-export function Statline({ card }: { card: DisplayCard }) {
+export function Statline({
+  card,
+  compact = false,
+}: {
+  card: DisplayCard;
+  compact?: boolean;
+}) {
   return (
-    <div className="statline">
-      <div className="statline-header">
-        <div>
-          <h3>{card.player_name}</h3>
-          <p className="season">{card.season}</p>
+    <article className={`statline ${compact ? "statline--compact" : ""}`}>
+      <header className="statline-header">
+        <div className="statline-identity">
+          <h3 className="statline-name">{card.player_name}</h3>
+          <p className="statline-meta">
+            {card.positions.length > 0 && (
+              <span className="statline-positions">{card.positions.join(" · ")}</span>
+            )}
+            <span className="statline-season">{card.season}</span>
+          </p>
         </div>
-        <span className={`tier ${tierClass[card.tier]}`}>{card.tier}</span>
-      </div>
-      <div className="stats-grid">
-        <span>PTS {card.PTS}</span>
-        <span>AST {card.AST}</span>
-        <span>TRB {card.TRB}</span>
-        <span>STL {card.STL}</span>
-        <span>BLK {card.BLK}</span>
-      </div>
-    </div>
+        <span className="team-ticker" title={`${card.team_ticker} · ${card.season}`}>
+          {card.team_ticker}
+        </span>
+      </header>
+      <dl className="stats-grid">
+        <div><dt>PTS</dt><dd>{card.PTS}</dd></div>
+        <div><dt>AST</dt><dd>{card.AST}</dd></div>
+        <div><dt>TRB</dt><dd>{card.TRB}</dd></div>
+        <div><dt>STL</dt><dd>{card.STL}</dd></div>
+        <div><dt>BLK</dt><dd>{card.BLK}</dd></div>
+      </dl>
+    </article>
   );
 }

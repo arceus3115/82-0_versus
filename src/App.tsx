@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ConfirmScreen } from "./components/ConfirmScreen";
 import { DraftScreen } from "./components/DraftScreen";
 import { LobbyScreen } from "./components/LobbyScreen";
-import { MulliganScreen } from "./components/MulliganScreen";
 import { ResultsScreen } from "./components/ResultsScreen";
-import { SimulationScreen } from "./components/SimulationScreen";
 import { useGame } from "./hooks/useGame";
+import type { ConnectionMode } from "./network/connection";
+
+const DISPLAY_NAME_KEY = "versus-display-name";
 
 type Screen = "home" | "game";
 
@@ -12,42 +14,89 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [nameInput, setNameInput] = useState("");
   const [codeInput, setCodeInput] = useState("");
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode>(
+    import.meta.env.DEV ? "local" : "online",
+  );
 
   const game = useGame();
+
+  useEffect(() => {
+    const saved = localStorage.getItem(DISPLAY_NAME_KEY);
+    if (saved) setNameInput(saved);
+  }, []);
+
+  useEffect(() => {
+    const trimmed = nameInput.trim();
+    if (trimmed) localStorage.setItem(DISPLAY_NAME_KEY, trimmed);
+  }, [nameInput]);
 
   const enterGame = () => setScreen("game");
 
   const handleCreate = async () => {
     if (!nameInput.trim()) return;
-    await game.createLobby(nameInput.trim());
-    enterGame();
+    const ok = await game.createLobby(nameInput.trim(), connectionMode);
+    if (ok) enterGame();
   };
 
   const handleJoin = async () => {
     if (!nameInput.trim() || !codeInput.trim()) return;
-    await game.joinLobby(codeInput.trim(), nameInput.trim());
-    enterGame();
+    const ok = await game.joinLobby(codeInput.trim(), nameInput.trim(), connectionMode);
+    if (ok) enterGame();
   };
+
+  if (screen === "game" && !game.state) {
+    return (
+      <div className="app">
+        <header className="topbar">
+          <span className="logo">VERSUS</span>
+        </header>
+        <main className="home">
+          <section className="hero-card home-hero">
+            <p className="eyebrow">Connecting</p>
+            <h1>Syncing lobby state…</h1>
+          </section>
+        </main>
+      </div>
+    );
+  }
 
   if (screen === "home" || !game.state) {
     return (
       <div className="app">
         <header className="topbar">
           <span className="logo">VERSUS</span>
-          <span className="tag">82–0 draft + streak</span>
+          <span className="tag">82–0 draft</span>
         </header>
 
         <main className="home">
           <section className="hero-card home-hero">
-            <p className="eyebrow">Multiplayer prototype</p>
-            <h1>Draft NBA seasons. Survive the streak.</h1>
+            <p className="eyebrow">Multiplayer draft</p>
+            <h1>Draft NBA seasons. Build your five.</h1>
             <p className="subcopy">
-              Host creates a lobby, friends join with a code. Snake draft, mulligans, then
-              synchronized RNG rounds — static app, no backend required.
+              Snake draft, in-draft mulligans, then both players confirm for the result.
             </p>
           </section>
 
           <div className="panel home-form">
+            {game.dataLoading && <p className="mode-hint">Loading player database…</p>}
+            {game.dataError && <p className="error">{game.dataError}</p>}
+            {game.dataReady && (
+              <p className="mode-hint">
+                {game.playerPool?.length.toLocaleString()} player-seasons loaded.
+              </p>
+            )}
+
+            <label>
+              Connection mode
+              <select
+                value={connectionMode}
+                onChange={(e) => setConnectionMode(e.target.value as ConnectionMode)}
+              >
+                <option value="local">Local testing (two tabs)</option>
+                <option value="online">Online (PeerJS)</option>
+              </select>
+            </label>
+
             <label>
               Display name
               <input
@@ -58,17 +107,21 @@ export default function App() {
               />
             </label>
 
-            <div className="home-actions">
+            <div className="home-form-host">
               <button
-                className="btn btn-primary"
-                disabled={game.connecting || !nameInput.trim()}
+                className="btn btn-primary btn-block"
+                disabled={game.connecting || !game.dataReady || !nameInput.trim()}
                 onClick={handleCreate}
               >
                 Create lobby (host)
               </button>
             </div>
 
-            <div className="join-row">
+            <div className="home-form-divider" aria-hidden>
+              <span>or join</span>
+            </div>
+
+            <div className="home-form-join">
               <label>
                 Join code
                 <input
@@ -79,8 +132,13 @@ export default function App() {
                 />
               </label>
               <button
-                className="btn btn-secondary"
-                disabled={game.connecting || !nameInput.trim() || codeInput.length < 4}
+                className="btn btn-secondary btn-block"
+                disabled={
+                  game.connecting ||
+                  !game.dataReady ||
+                  !nameInput.trim() ||
+                  codeInput.length < 4
+                }
                 onClick={handleJoin}
               >
                 Join lobby
@@ -95,10 +153,12 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app app--wide">
       <header className="topbar">
         <span className="logo">VERSUS</span>
-        <span className="tag">Code {game.state.code}</span>
+        <span className="tag">
+          {game.state.code} · {game.connectionMode === "local" ? "Local" : "Online"}
+        </span>
       </header>
 
       <main>
@@ -116,26 +176,22 @@ export default function App() {
             state={game.state}
             playerId={game.playerId}
             onPick={game.pickCard}
+            onMulliganFull={game.mulliganFull}
+            onMulliganYear={game.mulliganYear}
+            onSwap={game.swapPositions}
           />
         )}
-        {game.state.phase === "mulligan" && (
-          <MulliganScreen
+        {game.state.phase === "confirming" && (
+          <ConfirmScreen
             state={game.state}
             playerId={game.playerId}
-            onFull={game.mulliganFull}
-            onYear={game.mulliganYear}
-            onSkip={game.mulliganSkip}
+            onConfirm={game.confirmLineup}
+            onSwap={game.swapPositions}
           />
         )}
-        {game.state.phase === "simulating" && (
-          <SimulationScreen
-            state={game.state}
-            playerId={game.playerId}
-            isHost={game.isHost}
-            onSimulate={game.simulateRound}
-          />
+        {game.state.phase === "finished" && (
+          <ResultsScreen state={game.state} onPlayAgain={game.playAgain} />
         )}
-        {game.state.phase === "finished" && <ResultsScreen state={game.state} />}
       </main>
     </div>
   );

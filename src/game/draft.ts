@@ -4,10 +4,23 @@ import type { DisplayCard, InternalCard, PlayerSeasonRaw } from "./types";
 
 export const PICKS_PER_PLAYER = 5;
 export const PICK_TIMER_MS = 15_000;
-export const MIN_LOBBY_PLAYERS = 2;
-export const MAX_LOBBY_PLAYERS = 12;
+export const LOBBY_PLAYER_COUNT = 2;
 
-export function buildSnakeOrder(playerIds: string[], picksPerPlayer: number): string[] {
+export function normalizePlayerName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/** 2 players: strict alternation. 3+: standard snake. */
+export function buildDraftOrder(playerIds: string[], picksPerPlayer: number): string[] {
+  if (playerIds.length === 2) {
+    const [a, b] = playerIds;
+    const order: string[] = [];
+    for (let i = 0; i < picksPerPlayer * 2; i++) {
+      order.push(i % 2 === 0 ? a : b);
+    }
+    return order;
+  }
+
   const order: string[] = [];
   for (let round = 0; round < picksPerPlayer; round++) {
     const ids = round % 2 === 0 ? [...playerIds] : [...playerIds].reverse();
@@ -16,51 +29,96 @@ export function buildSnakeOrder(playerIds: string[], picksPerPlayer: number): st
   return order;
 }
 
-function tierBucket(card: InternalCard): "high" | "mid" | "low" {
-  if (card.mu >= 0.62) return "high";
-  if (card.mu <= 0.52 || card.tau >= 0.08 || card.sigma >= 0.06) return "low";
-  return "mid";
+export interface DraftedPool {
+  ids: Set<string>;
+  names: Set<string>;
+}
+
+export function getDraftedPool(
+  teams: { team: InternalCard[] }[],
+  exemptCardIds: Set<string> = new Set(),
+): DraftedPool {
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  for (const { team } of teams) {
+    for (const card of team) {
+      if (exemptCardIds.has(card.id)) continue;
+      ids.add(card.id);
+      names.add(normalizePlayerName(card.player_name));
+    }
+  }
+  return { ids, names };
+}
+
+function weightedSampleWithoutReplacement(
+  cards: InternalCard[],
+  count: number,
+  weightFor: (card: InternalCard) => number,
+  rng: SeededRNG,
+): InternalCard[] {
+  const pool = [...cards];
+  const picked: InternalCard[] = [];
+
+  while (picked.length < count && pool.length > 0) {
+    const weights = pool.map(weightFor);
+    const total = weights.reduce((sum, w) => sum + w, 0);
+    let roll = rng.next() * total;
+    let index = 0;
+
+    for (; index < pool.length; index++) {
+      roll -= weights[index];
+      if (roll <= 0) break;
+    }
+
+    const chosen = pool.splice(Math.min(index, pool.length - 1), 1)[0];
+    picked.push(chosen);
+  }
+
+  return picked;
 }
 
 export function generateCardOffer(
   pool: PlayerSeasonRaw[],
-  draftedIds: Set<string>,
+  drafted: DraftedPool,
   rng: SeededRNG,
+  recentlyOffered: Set<string> = new Set(),
 ): InternalCard[] {
   const available = pool
-    .filter((p) => !draftedIds.has(p.id))
+    .filter(
+      (p) =>
+        !drafted.ids.has(p.id) &&
+        !drafted.names.has(normalizePlayerName(p.player_name)),
+    )
     .map(toInternalCard);
 
-  const high = available.filter((c) => tierBucket(c) === "high");
-  const mid = available.filter((c) => tierBucket(c) === "mid");
-  const low = available.filter((c) => tierBucket(c) === "low");
+  if (available.length <= 5) {
+    return rng.shuffle(available);
+  }
 
-  const pickOne = (list: InternalCard[], fallback: InternalCard[]) => {
-    const source = list.length > 0 ? list : fallback;
-    return source[rng.nextInt(source.length)];
+  const weightFor = (card: InternalCard) => {
+    const name = normalizePlayerName(card.player_name);
+    let weight = 0.55 + rng.next() * 0.9;
+
+    // Soft quality curve — stars appear, but not every offer.
+    weight *= 0.35 + card.mu * 0.65;
+
+    // Penalize names shown recently in this session.
+    if (recentlyOffered.has(name)) weight *= 0.1;
+
+    // Slight boost for volatile/risky cards to widen variety.
+    if (card.tier === "Volatile") weight *= 1.15;
+    if (card.tier === "Risky") weight *= 1.08;
+
+    // Low-minute seasons stay in the pool but are rarely offered.
+    if (card.MP < 800) weight *= 0.06;
+    else if (card.MP < 1200) weight *= 0.2;
+    else if (card.MP < 1800) weight *= 0.5;
+    else if (card.MP < 2200) weight *= 0.78;
+
+    return weight;
   };
 
-  const used = new Set<string>();
-  const take = (card: InternalCard) => {
-    if (used.has(card.id)) {
-      const alt = available.find((c) => !used.has(c.id));
-      if (!alt) return card;
-      used.add(alt.id);
-      return alt;
-    }
-    used.add(card.id);
-    return card;
-  };
-
-  const cards = [
-    take(pickOne(high, available)),
-    take(pickOne(mid, available)),
-    take(pickOne(mid, available)),
-    take(pickOne(low, available)),
-    take(pickOne(low, available)),
-  ];
-
-  return rng.shuffle(cards);
+  return rng.shuffle(weightedSampleWithoutReplacement(available, 5, weightFor, rng));
 }
 
 export function toDisplayOffer(cards: InternalCard[]): DisplayCard[] {
@@ -70,28 +128,32 @@ export function toDisplayOffer(cards: InternalCard[]): DisplayCard[] {
 export function findAlternateSeason(
   pool: PlayerSeasonRaw[],
   playerName: string,
-  excludeIds: Set<string>,
+  drafted: DraftedPool,
   rng: SeededRNG,
 ): InternalCard | null {
-  const options = pool.filter(
-    (p) => p.player_name === playerName && !excludeIds.has(p.id),
-  );
+  const options = pool
+    .filter(
+      (p) =>
+        normalizePlayerName(p.player_name) === normalizePlayerName(playerName) &&
+        !drafted.ids.has(p.id),
+    )
+    .map(toInternalCard);
   if (options.length === 0) return null;
-  return toInternalCard(options[rng.nextInt(options.length)]);
+  return options[rng.nextInt(options.length)];
 }
 
-export function generateFullRoster(
-  pool: PlayerSeasonRaw[],
-  draftedIds: Set<string>,
-  rng: SeededRNG,
-): InternalCard[] {
-  const roster: InternalCard[] = [];
-  const localDrafted = new Set(draftedIds);
-  for (let i = 0; i < PICKS_PER_PLAYER; i++) {
-    const offer = generateCardOffer(pool, localDrafted, rng);
-    const pick = offer[rng.nextInt(offer.length)];
-    roster.push(pick);
-    localDrafted.add(pick.id);
+/** Drafted players plus other cards currently on the table (offer). */
+export function getOfferExclusions(
+  drafted: DraftedPool,
+  offer: InternalCard[],
+  exceptId?: string,
+): DraftedPool {
+  const ids = new Set(drafted.ids);
+  const names = new Set(drafted.names);
+  for (const card of offer) {
+    if (card.id === exceptId) continue;
+    ids.add(card.id);
+    names.add(normalizePlayerName(card.player_name));
   }
-  return roster;
+  return { ids, names };
 }

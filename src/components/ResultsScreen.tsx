@@ -1,39 +1,54 @@
-import { rarityPercentile } from "../game/simulate";
 import type { LobbyState } from "../game/types";
+import { CourtRoster } from "./CourtRoster";
+import { PredictedStatlineCompare } from "./PredictedStatline";
 
 interface Props {
   state: LobbyState;
+  onPlayAgain: () => void;
 }
 
-export function ResultsScreen({ state }: Props) {
+export function ResultsScreen({ state, onPlayAgain }: Props) {
+  const isTie = state.result?.isTie ?? false;
   const winner = state.players.find((p) => p.id === state.winnerId);
-  const sorted = [...state.players].sort((a, b) => b.maxStreak - a.maxStreak);
 
   return (
-    <section className="screen results-screen">
-      <div className="hero-card winner-card">
-        <p className="eyebrow">Winner</p>
-        <h1>{winner?.name ?? "—"}</h1>
-        <p className="subcopy">
-          {state.mode === "elimination" ? "Last undefeated run" : "Highest streak in 18 rounds"}
-        </p>
+    <section className="finalize-screen results-screen">
+      <div className="surface-panel surface-panel--hero finalize-hero">
+        <p className="eyebrow">{isTie ? "Final" : "Winner"}</p>
+        <h1>{isTie ? "Tie game" : (winner?.name ?? "—")}</h1>
       </div>
 
-      <div className="panel">
-        <h3>Final streaks</h3>
-        <ul className="player-list">
-          {sorted.map((player) => (
-            <li key={player.id}>
-              <span>{player.name}</span>
-              <span>
-                {player.maxStreak} max · {rarityPercentile(player.maxStreak)}
-              </span>
-            </li>
-          ))}
-        </ul>
+      {state.result && (
+        <PredictedStatlineCompare
+          lines={state.result.predictedStatlines}
+          winnerId={state.winnerId}
+        />
+      )}
+
+      <div className="lineup-split">
+        {state.players.map((player) => (
+          <article
+            key={player.id}
+            className={`lineup-card ${player.id === state.winnerId ? "lineup-card--winner" : ""}`}
+          >
+            <header className="lineup-card__header">
+              <h3>{player.name}</h3>
+              {player.id === state.winnerId && <span className="status-ready">Winner</span>}
+              {isTie && <span className="status-wait">Tied</span>}
+            </header>
+            <div className="lineup-card__body">
+              <CourtRoster team={player.team} />
+            </div>
+          </article>
+        ))}
       </div>
 
-      <p className="seed-note">RNG seed: {state.rngSeed} (reproducible run)</p>
+      <div className="finalize-actions">
+        <button className="btn btn-primary btn-large" onClick={onPlayAgain}>
+          Play again
+        </button>
+        <p className="seed-note">RNG seed: {state.rngSeed}</p>
+      </div>
     </section>
   );
 }

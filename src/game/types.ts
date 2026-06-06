@@ -1,11 +1,4 @@
-export type GamePhase =
-  | "waiting"
-  | "drafting"
-  | "mulligan"
-  | "simulating"
-  | "finished";
-
-export type GameMode = "elimination" | "fixed_season";
+export type GamePhase = "waiting" | "drafting" | "confirming" | "finished";
 
 export type VolatilityTier = "Stable" | "Volatile" | "Risky";
 
@@ -13,6 +6,8 @@ export interface PlayerSeasonRaw {
   id: string;
   player_name: string;
   season: string;
+  team_ticker: string;
+  positions: string[];
   PTS: number;
   AST: number;
   TRB: number;
@@ -28,11 +23,17 @@ export interface InternalCard {
   id: string;
   player_name: string;
   season: string;
+  team_ticker: string;
+  positions: string[];
   PTS: number;
   AST: number;
   TRB: number;
   STL: number;
   BLK: number;
+  MP: number;
+  BPM: number;
+  TS_pct: number;
+  TOV_pct: number;
   tier: VolatilityTier;
   mu: number;
   sigma: number;
@@ -43,50 +44,82 @@ export interface DisplayCard {
   id: string;
   player_name: string;
   season: string;
+  team_ticker: string;
+  positions: string[];
   PTS: number;
   AST: number;
   TRB: number;
   STL: number;
   BLK: number;
-  tier: VolatilityTier;
 }
 
 export interface MulliganState {
   fullUsed: boolean;
   yearUsed: boolean;
-  fullAvailable: boolean;
-  yearAvailable: boolean;
-  done: boolean;
 }
 
 export interface LobbyPlayer {
   id: string;
   name: string;
   ready: boolean;
+  confirmed: boolean;
   isHost: boolean;
   team: InternalCard[];
   muTeam: number;
   sigmaTeam: number;
   tauTeam: number;
-  streak: number;
-  maxStreak: number;
-  eliminated: boolean;
   mulligan: MulliganState;
 }
 
-export interface RoundOutcome {
+export interface DraftPickRecord {
+  pickNumber: number;
+  drafterId: string;
+  drafterName: string;
+  card: DisplayCard;
+}
+
+export interface PredictedStatline {
   playerId: string;
-  round: number;
-  won: boolean;
-  flavor: string;
-  collapse: boolean;
-  pWin: number;
+  playerName: string;
+  PTS: number;
+  AST: number;
+  TRB: number;
+  STL: number;
+  BLK: number;
+}
+
+export interface PlayerTemperatureLog {
+  teamPlayerId: string;
+  teamName: string;
+  player_name: string;
+  label: string;
+}
+
+export interface TeamSimulationDetail {
+  playerId: string;
+  teamName: string;
+  playerLogs: PlayerTemperatureLog[];
+}
+
+export interface MatchResult {
+  winnerId: string | null;
+  isTie: boolean;
+  predictedStatlines: PredictedStatline[];
+  scores: {
+    playerId: string;
+    playerName: string;
+    rating: number;
+    netRating: number;
+    offensiveRating: number;
+    defensiveRating: number;
+  }[];
+  simulationDetails: TeamSimulationDetail[];
+  temperatureLog: PlayerTemperatureLog[];
 }
 
 export interface LobbyState {
   code: string;
   phase: GamePhase;
-  mode: GameMode;
   rngSeed: number;
   hostId: string;
   players: LobbyPlayer[];
@@ -95,23 +128,23 @@ export interface LobbyState {
   offeredCards: DisplayCard[];
   pickDeadline: number | null;
   totalDraftPicks: number;
-  simulationRound: number;
-  maxRounds: number;
-  collapseLambda: number;
-  lastOutcomes: RoundOutcome[];
+  lastPick: DraftPickRecord | null;
+  pickHistory: DraftPickRecord[];
   winnerId: string | null;
+  result: MatchResult | null;
   feed: string[];
 }
 
 export type ClientMessage =
   | { type: "join"; name: string }
   | { type: "ready" }
-  | { type: "start"; mode: GameMode; minPlayers?: number }
+  | { type: "start" }
   | { type: "pick"; cardId: string }
   | { type: "mulligan_full" }
   | { type: "mulligan_year"; playerName: string }
-  | { type: "mulligan_skip" }
-  | { type: "simulate_round" };
+  | { type: "confirm" }
+  | { type: "swap_positions"; fromIndex: number; toIndex: number }
+  | { type: "play_again" };
 
 export type HostMessage =
   | { type: "state"; state: LobbyState }
