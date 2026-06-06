@@ -1,8 +1,8 @@
 # Versus
 
-Real-time, lobby-based multiplayer web game: snake draft of NBA player-seasons, mulligans, then simulated box-score results.
+Real-time, lobby-based multiplayer web game: snake draft of NBA player-seasons (2–6 players), mulligans, then a single-elimination bracket with simulated box-score results.
 
-**Hosting:** static SPA on GitHub Pages. Multiplayer uses PeerJS (host-authoritative state) or local `BroadcastChannel` for two-tab testing.
+**Hosting:** static SPA on GitHub Pages. Multiplayer uses PeerJS (host-authoritative state) or local `BroadcastChannel` for multi-tab testing.
 
 ## Why player data isn't fetched live from Kaggle in the browser
 
@@ -41,7 +41,7 @@ CI (`.github/workflows/ci.yml`) runs the same checks on pull requests and pushes
 
 1. **Connection mode → Local**
 2. Tab 1: Create lobby → copy code
-3. Tab 2: Join with code
+3. Tabs 2–6: Join with code (one tab per player)
 
 ### Online mode (two devices / browsers)
 

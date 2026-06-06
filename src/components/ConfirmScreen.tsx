@@ -19,7 +19,7 @@ export function ConfirmScreen({ state, playerId, onConfirm, onSwap }: Props) {
         <p className="eyebrow">Draft complete</p>
         <h2>Lock in your lineup</h2>
         <p className="subcopy">
-          Swap positions on your court, then confirm. Both players must lock in to see the result.
+          Swap positions on your court, then confirm. All players must lock in to start the bracket.
         </p>
       </div>
 
@@ -63,7 +63,12 @@ export function ConfirmScreen({ state, playerId, onConfirm, onSwap }: Props) {
             )}
           </>
         )}
-        {me?.confirmed && <p className="waiting-host">Waiting for opponent to lock in…</p>}
+        {me?.confirmed && (
+          <p className="waiting-host">
+            Waiting for {state.players.filter((p) => !p.confirmed).length} player
+            {state.players.filter((p) => !p.confirmed).length === 1 ? "" : "s"} to lock in…
+          </p>
+        )}
       </div>
     </section>
   );

@@ -4,23 +4,15 @@ import type { DisplayCard, InternalCard, PlayerSeasonRaw } from "./types";
 
 export const PICKS_PER_PLAYER = 5;
 export const PICK_TIMER_MS = 15_000;
-export const LOBBY_PLAYER_COUNT = 2;
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 6;
 
 export function normalizePlayerName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-/** 2 players: strict alternation. 3+: standard snake. */
+/** Standard snake draft order. */
 export function buildDraftOrder(playerIds: string[], picksPerPlayer: number): string[] {
-  if (playerIds.length === 2) {
-    const [a, b] = playerIds;
-    const order: string[] = [];
-    for (let i = 0; i < picksPerPlayer * 2; i++) {
-      order.push(i % 2 === 0 ? a : b);
-    }
-    return order;
-  }
-
   const order: string[] = [];
   for (let round = 0; round < picksPerPlayer; round++) {
     const ids = round % 2 === 0 ? [...playerIds] : [...playerIds].reverse();
