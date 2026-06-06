@@ -58,7 +58,7 @@ git push origin --delete gh-pages
 ## 4. Play
 
 1. Open your Pages URL on two devices/browsers.
-2. Choose **Online (PeerJS)**.
+2. Choose **Online**.
 3. Host: **Create lobby** → share code.
 4. Guest: **Join lobby** with the code.
 
@@ -70,4 +70,4 @@ Both players see a **Connecting** screen while the link is established.
 npm run dev:online
 ```
 
-Uses `localhost:9000` for signaling. Both tabs: **Online (PeerJS)**.
+Uses `localhost:9000` for signaling. Both tabs: **Online**.

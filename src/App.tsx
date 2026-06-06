@@ -85,13 +85,13 @@ export default function App() {
             )}
 
             <label>
-              Connection mode
+              Connection method
               <select
                 value={connectionMode}
                 onChange={(e) => setConnectionMode(e.target.value as ConnectionMode)}
               >
-                <option value="local">Local testing (two tabs)</option>
-                <option value="online">Online (PeerJS)</option>
+                <option value="local">Local</option>
+                <option value="online">Online</option>
               </select>
             </label>
 

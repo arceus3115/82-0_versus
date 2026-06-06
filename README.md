@@ -25,9 +25,9 @@ npm install
 npm run dev
 ```
 
-### Local testing (recommended)
+### Local (recommended for dev)
 
-1. **Connection mode → Local testing**
+1. **Connection mode → Local**
 2. Tab 1: Create lobby → copy code
 3. Tab 2: Join with code
 
@@ -41,7 +41,7 @@ Online uses **PeerJS** and needs a small **signaling server** (GitHub Pages alon
 npm run dev:online
 ```
 
-Starts the Peer server on port 9000 and Vite. Both tabs: **Online (PeerJS)**.
+Starts the Peer server on port 9000 and Vite. Both tabs: **Online**.
 
 **Production (GitHub Pages + Render):**
 
