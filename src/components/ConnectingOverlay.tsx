@@ -3,17 +3,23 @@ import type { ConnectionMode } from "../network/connection";
 interface Props {
   connectionMode: ConnectionMode;
   phase?: "connect" | "sync";
+  statusMessage?: string;
 }
 
-export function ConnectingOverlay({ connectionMode, phase = "connect" }: Props) {
+export function ConnectingOverlay({
+  connectionMode,
+  phase = "connect",
+  statusMessage,
+}: Props) {
   const isOnline = connectionMode === "online";
   const title = phase === "sync" ? "Syncing lobby" : "Connecting";
-  const detail =
+  const defaultDetail =
     phase === "sync"
       ? "Pulling the latest room state…"
       : isOnline
-        ? "Linking players through the signaling server. First connect after idle can take up to a minute."
+        ? "First connect after idle can take up to a minute while the server wakes."
         : "Opening your local lobby channel…";
+  const detail = statusMessage ?? defaultDetail;
 
   return (
     <div className="connecting-overlay" role="status" aria-live="polite">

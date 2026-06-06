@@ -11,6 +11,7 @@ export function useGame() {
   const [isHost, setIsHost] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [connectingMessage, setConnectingMessage] = useState<string | undefined>();
   const [name, setName] = useState("");
   const [playerPool, setPlayerPool] = useState<PlayerSeasonRaw[] | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
@@ -83,6 +84,7 @@ export function useGame() {
     mode: ConnectionMode = connectionMode,
   ): Promise<boolean> => {
     setConnecting(true);
+    setConnectingMessage(undefined);
     setError(null);
     setName(displayName);
     setConnectionMode(mode);
@@ -98,6 +100,7 @@ export function useGame() {
           setIsHost(host);
         },
         onError: setError,
+        onConnectingStatus: setConnectingMessage,
         onPeerConnected: () => {
           const engine = engineRef.current;
           if (engine) syncState(engine.getState());
@@ -121,6 +124,7 @@ export function useGame() {
       return false;
     } finally {
       setConnecting(false);
+      setConnectingMessage(undefined);
     }
   };
 
@@ -130,6 +134,7 @@ export function useGame() {
     mode: ConnectionMode = connectionMode,
   ): Promise<boolean> => {
     setConnecting(true);
+    setConnectingMessage(undefined);
     setError(null);
     setName(displayName);
     setConnectionMode(mode);
@@ -143,6 +148,7 @@ export function useGame() {
           setIsHost(host);
         },
         onError: setError,
+        onConnectingStatus: setConnectingMessage,
       });
       connectionRef.current = conn;
       const guestId = await conn.joinLobby(code, displayName);
@@ -154,6 +160,7 @@ export function useGame() {
       return false;
     } finally {
       setConnecting(false);
+      setConnectingMessage(undefined);
     }
   };
 
@@ -177,6 +184,7 @@ export function useGame() {
     isHost,
     error,
     connecting,
+    connectingMessage,
     name,
     connectionMode,
     playerPool,

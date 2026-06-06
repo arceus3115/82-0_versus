@@ -90,3 +90,18 @@ export async function requirePeerServerConfig(): Promise<PeerServerConfig> {
   if (!config) throw new Error(MISSING_PEER_SERVER_MSG);
   return config;
 }
+
+/** Hit the signaling HTTP endpoint so cold hosts (e.g. Render free tier) wake before WebSocket. */
+export async function wakeSignalingServer(config: PeerServerConfig): Promise<void> {
+  const protocol = config.secure ? "https" : "http";
+  const portSuffix =
+    config.secure && config.port === 443 ? "" : config.port === 80 ? "" : `:${config.port}`;
+  const base = `${protocol}://${config.host}${portSuffix}`;
+  const path = config.path === "/" ? "/" : config.path;
+
+  try {
+    await fetch(`${base}${path}`, { mode: "no-cors", cache: "no-store" });
+  } catch {
+    // Render may still spin up even if the browser hides the response.
+  }
+}

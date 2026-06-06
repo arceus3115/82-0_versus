@@ -54,6 +54,7 @@ export default function App() {
       <ConnectingOverlay
         connectionMode={activeConnectionMode}
         phase={showSyncing ? "sync" : "connect"}
+        statusMessage={game.connectingMessage}
       />
     );
   }
@@ -68,10 +69,11 @@ export default function App() {
 
         <main className="home">
           <section className="hero-card home-hero">
-            <p className="eyebrow">Multiplayer draft</p>
-            <h1>Draft NBA seasons. Build your five.</h1>
+            <p className="eyebrow">Versus</p>
+            <h1>Build a legend. Run the night.</h1>
             <p className="subcopy">
-              Snake draft, in-draft mulligans, then both players confirm for the result.
+              Two drafters. Five cards. One simulated showdown — hot streaks, cold
+              nights, and all the history in the pool.
             </p>
           </section>
 

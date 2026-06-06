@@ -1,11 +1,29 @@
 import Peer, { type DataConnection } from "peerjs";
 import { generateLobbyCode, SeededRNG } from "../game/rng";
 import type { ClientMessage, HostMessage, LobbyState } from "../game/types";
-import { requirePeerServerConfig } from "./peerConfig";
+import { requirePeerServerConfig, wakeSignalingServer } from "./peerConfig";
 import type { ConnectionRole, GameTransport, GameTransportHandlers } from "./types";
 
 const PEER_PREFIX = "versus-";
-const CONNECT_TIMEOUT_MS = 15_000;
+const DEV_TIMEOUT_MS = 15_000;
+const PROD_TIMEOUT_MS = 90_000;
+const DEV_MAX_ATTEMPTS = 2;
+const PROD_MAX_ATTEMPTS = 5;
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes("Timed out") ||
+    msg.includes("Lost connection") ||
+    msg.includes("Could not connect") ||
+    msg.includes("network") ||
+    msg.includes("Network")
+  );
+}
 
 export class PeerConnection implements GameTransport {
   mode = "online" as const;
@@ -75,6 +93,17 @@ export class PeerConnection implements GameTransport {
     this.latestState = null;
   }
 
+  private get timeouts() {
+    return {
+      attemptMs: import.meta.env.DEV ? DEV_TIMEOUT_MS : PROD_TIMEOUT_MS,
+      maxAttempts: import.meta.env.DEV ? DEV_MAX_ATTEMPTS : PROD_MAX_ATTEMPTS,
+    };
+  }
+
+  private status(message: string) {
+    this.handlers.onConnectingStatus?.(message);
+  }
+
   private makeCode() {
     return generateLobbyCode(new SeededRNG((Math.random() * 2 ** 32) >>> 0));
   }
@@ -82,51 +111,103 @@ export class PeerConnection implements GameTransport {
   private async peerOptions() {
     const config = await requirePeerServerConfig();
     return {
-      host: config.host,
-      port: config.port,
-      // PeerJS builds wss://host:port + path + "peerjs"; path must not be empty.
-      path: "/",
-      secure: config.secure,
-      debug: import.meta.env.DEV ? 2 : 0,
+      config,
+      options: {
+        host: config.host,
+        port: config.port,
+        path: "/",
+        secure: config.secure,
+        debug: import.meta.env.DEV ? 2 : 0,
+      },
     };
   }
 
   private async initHostPeer(): Promise<{ code: string; peerId: string }> {
-    const options = await this.peerOptions();
-    return new Promise((resolve, reject) => {
-      const code = this.makeCode();
-      const peerId = `${PEER_PREFIX}${code}`;
-      const peer = new Peer(peerId, options);
-      this.peer = peer;
+    const { config, options } = await this.peerOptions();
+    const { attemptMs, maxAttempts } = this.timeouts;
 
-      const fail = (err: unknown) => {
-        const hint = import.meta.env.DEV
-          ? " Start the local Peer server: npm run dev:online"
-          : "";
-        reject(new Error(`${err instanceof Error ? err.message : String(err)}${hint}`));
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      this.status(
+        attempt === 1
+          ? "Waking up signaling server…"
+          : `Signaling server waking up… retry ${attempt} of ${maxAttempts}`,
+      );
+      await wakeSignalingServer(config);
+      if (attempt > 1) await delay(1200 * attempt);
+
+      try {
+        this.status(
+          attempt === 1 ? "Registering your lobby…" : "Registering your lobby… hang tight",
+        );
+        return await this.registerHostOnce(options, attemptMs);
+      } catch (err) {
+        this.destroyPeerOnly();
+        if (attempt >= maxAttempts || !isRetryableError(err)) {
+          throw new Error(
+            import.meta.env.DEV
+              ? `${err instanceof Error ? err.message : String(err)} Start npm run dev:online.`
+              : `Signaling server is still waking up. Try Create lobby again in a few seconds.`,
+          );
+        }
+      }
+    }
+
+    throw new Error("Could not register host with signaling server.");
+  }
+
+  private destroyPeerOnly() {
+    this.peer?.destroy();
+    this.peer = null;
+  }
+
+  private registerHostOnce(
+    options: {
+      host: string;
+      port: number;
+      path: string;
+      secure: boolean;
+      debug: number;
+    },
+    timeoutMs: number,
+  ): Promise<{ code: string; peerId: string }> {
+    return new Promise((resolve, reject) => {
+      const start = () => {
+        const code = this.makeCode();
+        const peerId = `${PEER_PREFIX}${code}`;
+        const peer = new Peer(peerId, options);
+        this.peer = peer;
+
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error("Timed out registering host with signaling server."));
+        }, timeoutMs);
+
+        const cleanup = () => {
+          clearTimeout(timer);
+          peer.destroy();
+          if (this.peer === peer) this.peer = null;
+        };
+
+        peer.on("open", () => {
+          clearTimeout(timer);
+          resolve({ code, peerId });
+        });
+
+        peer.on("error", (err) => {
+          const msg = String(err);
+          if (msg.includes("is taken") || msg.includes("unavailable")) {
+            cleanup();
+            start();
+            return;
+          }
+          cleanup();
+          reject(err);
+        });
+
+        peer.on("connection", (conn) => this.wireHostConnection(conn));
       };
 
-      const timer = setTimeout(() => {
-        fail(new Error("Timed out registering host with signaling server."));
-      }, CONNECT_TIMEOUT_MS);
-
-      peer.on("open", () => {
-        clearTimeout(timer);
-        resolve({ code, peerId });
-      });
-
-      peer.on("error", (err) => {
-        const msg = String(err);
-        if (msg.includes("is taken") || msg.includes("unavailable")) {
-          clearTimeout(timer);
-          this.peer?.destroy();
-          this.initHostPeer().then(resolve).catch(reject);
-          return;
-        }
-        fail(err);
-      });
-
-      peer.on("connection", (conn) => this.wireHostConnection(conn));
+      start();
     });
   }
 
@@ -168,25 +249,69 @@ export class PeerConnection implements GameTransport {
     code: string,
     guestName: string,
   ): Promise<void> {
-    const options = await this.peerOptions();
+    const { config, options } = await this.peerOptions();
+    const { attemptMs, maxAttempts } = this.timeouts;
+    const hostPeerId = `${PEER_PREFIX}${code}`;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      this.status(
+        attempt === 1
+          ? "Waking up signaling server…"
+          : `Connecting to host… retry ${attempt} of ${maxAttempts}`,
+      );
+      await wakeSignalingServer(config);
+      if (attempt > 1) await delay(1200 * attempt);
+
+      try {
+        this.status(attempt === 1 ? "Finding the host lobby…" : "Still looking for the host…");
+        await this.joinHostOnce(options, playerId, hostPeerId, guestName, attemptMs);
+        return;
+      } catch (err) {
+        this.destroyPeerOnly();
+        if (attempt >= maxAttempts || !isRetryableError(err)) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("Could not reach host")) throw err;
+          throw new Error(
+            msg.includes("Timed out")
+              ? `Could not join in time. Confirm the code "${code}" and that the host is still online.`
+              : msg,
+          );
+        }
+      }
+    }
+  }
+
+  private joinHostOnce(
+    options: {
+      host: string;
+      port: number;
+      path: string;
+      secure: boolean;
+      debug: number;
+    },
+    playerId: string,
+    hostPeerId: string,
+    guestName: string,
+    timeoutMs: number,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const peer = new Peer(playerId, options);
       this.peer = peer;
-      const hostPeerId = `${PEER_PREFIX}${code}`;
 
       const timer = setTimeout(() => {
-        fail(
-          new Error(
-            import.meta.env.DEV
-              ? "Connection timed out. Run npm run dev:online and keep the host tab open."
-              : "Connection timed out. Check the join code and that the host is still online.",
-          ),
-        );
-      }, CONNECT_TIMEOUT_MS);
+        cleanup();
+        reject(new Error("Connection timed out waiting for host."));
+      }, timeoutMs);
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        peer.destroy();
+        if (this.peer === peer) this.peer = null;
+      };
 
       const fail = (err: unknown) => {
-        clearTimeout(timer);
-        reject(new Error(err instanceof Error ? err.message : String(err)));
+        cleanup();
+        reject(err instanceof Error ? err : new Error(String(err)));
       };
 
       peer.on("open", () => {
@@ -216,7 +341,7 @@ export class PeerConnection implements GameTransport {
         });
 
         conn.on("close", () => {
-          this.handlers.onError("Disconnected from host.");
+          if (!joined) fail(new Error("Disconnected from host before lobby synced."));
         });
 
         conn.on("error", (err) => fail(err));
@@ -227,7 +352,7 @@ export class PeerConnection implements GameTransport {
         if (msg.includes("Lost connection") || msg.includes("Could not connect")) {
           fail(
             new Error(
-              `Could not reach host lobby "${code}". Confirm the code and that the host is online.`,
+              `Could not reach host lobby "${hostPeerId.replace(PEER_PREFIX, "")}". Confirm the code and that the host is online.`,
             ),
           );
           return;
