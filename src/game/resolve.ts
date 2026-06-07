@@ -1,4 +1,7 @@
+import { buildSlottedLineup, computeLineupSynergy } from "./lineupSynergy";
+import { computePositionFit, SLOT_LABELS } from "./positionFit";
 import type { SeededRNG } from "./rng";
+import { computeMatchupFactors, computeTeamRatings, type TeamRatings } from "./teamRatings";
 import type {
   InternalCard,
   LobbyPlayer,
@@ -42,9 +45,9 @@ function displayLabel(temp: GameTemp, raw: string | null): string {
   return "normal";
 }
 
-function rollPlayerGameState(card: InternalCard, rng: SeededRNG): PlayerGameState {
+function rollPlayerGameState(card: InternalCard, rng: SeededRNG, tauBump = 0): PlayerGameState {
   const hotChance = 0.065 + card.mu * 0.055;
-  const coldChance = 0.055 + card.tau * 0.5;
+  const coldChance = clamp(0.055 + card.tau * 0.5 + tauBump, 0, 0.35);
   const roll = rng.next();
 
   if (roll < hotChance) {
@@ -96,9 +99,9 @@ function rollPlayerGameState(card: InternalCard, rng: SeededRNG): PlayerGameStat
   };
 }
 
-function gameStdDev(mean: number, cv: number, mp: number): number {
+function gameStdDev(mean: number, cv: number, mp: number, sigmaMult = 1): number {
   const reliability = Math.sqrt(clamp(mp, 400, 3200) / 2000);
-  return mean * cv * (1.05 / reliability);
+  return mean * cv * (1.05 / reliability) * sigmaMult;
 }
 
 function correlatedMult(
@@ -116,24 +119,31 @@ function sampleStat(
   stat: StatKey,
   mult: number,
   rng: SeededRNG,
+  sigmaMult = 1,
 ): number {
   let spike = 1;
   if (rng.next() < 0.04 + card.sigma * 0.5) {
     spike = rng.next() < 0.5 ? 0.4 + rng.next() * 0.35 : 1.25 + rng.next() * 0.55;
   }
 
-  const std = gameStdDev(mean, STAT_CV[stat], card.MP);
+  const std = gameStdDev(mean, STAT_CV[stat], card.MP, sigmaMult);
   const draw = mean * mult * spike + rng.normal() * std;
   return Math.max(0, draw);
 }
 
 interface TeamSimulation {
   statline: PredictedStatline;
+  rawPTS: number;
   totalPTS: number;
   playerLogs: PlayerTemperatureLog[];
+  ratings: TeamRatings;
 }
 
 function simulateTeam(player: LobbyPlayer, rng: SeededRNG): TeamSimulation {
+  const lineup = buildSlottedLineup(player.team);
+  const synergy = computeLineupSynergy(lineup);
+  const ratings = computeTeamRatings(lineup, synergy.offensiveMult);
+
   let pts = 0;
   let ast = 0;
   let trb = 0;
@@ -141,17 +151,49 @@ function simulateTeam(player: LobbyPlayer, rng: SeededRNG): TeamSimulation {
   let blk = 0;
   const playerLogs: PlayerTemperatureLog[] = [];
 
-  for (const card of player.team) {
-    const gameState = rollPlayerGameState(card, rng);
+  for (let i = 0; i < lineup.length; i++) {
+    const { card } = lineup[i];
+    const slot = SLOT_LABELS[i] ?? "SF";
+    const fit = computePositionFit(card, slot);
+
+    const gameState = rollPlayerGameState(card, rng, fit.tauBump);
     const offMult = correlatedMult(gameState, "offense");
     const rebMult = correlatedMult(gameState, "rebound");
     const defMult = correlatedMult(gameState, "defense");
 
-    pts += sampleStat(card.PTS, card, "PTS", offMult, rng);
-    ast += sampleStat(card.AST, card, "AST", offMult * 0.96, rng);
-    trb += sampleStat(card.TRB, card, "TRB", rebMult, rng);
-    stl += sampleStat(card.STL, card, "STL", defMult, rng);
-    blk += sampleStat(card.BLK, card, "BLK", defMult, rng);
+    pts += sampleStat(
+      card.PTS * fit.statMults.PTS * synergy.offensiveMult,
+      card,
+      "PTS",
+      offMult,
+      rng,
+      fit.sigmaMult,
+    );
+    ast += sampleStat(
+      card.AST * fit.statMults.AST * synergy.offensiveMult,
+      card,
+      "AST",
+      offMult * 0.96,
+      rng,
+      fit.sigmaMult,
+    );
+    trb += sampleStat(card.TRB * fit.statMults.TRB, card, "TRB", rebMult, rng, fit.sigmaMult);
+    stl += sampleStat(
+      card.STL * fit.statMults.STL * synergy.defensiveMult,
+      card,
+      "STL",
+      defMult,
+      rng,
+      fit.sigmaMult,
+    );
+    blk += sampleStat(
+      card.BLK * fit.statMults.BLK * synergy.defensiveMult,
+      card,
+      "BLK",
+      defMult,
+      rng,
+      fit.sigmaMult,
+    );
 
     playerLogs.push({
       teamPlayerId: player.id,
@@ -171,11 +213,24 @@ function simulateTeam(player: LobbyPlayer, rng: SeededRNG): TeamSimulation {
     BLK: round1(blk),
   };
 
-  return { statline, totalPTS: statline.PTS, playerLogs };
+  return { statline, rawPTS: statline.PTS, totalPTS: statline.PTS, playerLogs, ratings };
 }
 
 export function resolveMatch(players: LobbyPlayer[], rng: SeededRNG): MatchResult {
   const simulations = players.map((player) => simulateTeam(player, rng));
+
+  if (simulations.length === 2) {
+    const { factorA, factorB } = computeMatchupFactors(
+      simulations[0].ratings,
+      simulations[1].ratings,
+    );
+
+    simulations[0].statline.PTS = round1(simulations[0].rawPTS * factorA);
+    simulations[0].totalPTS = simulations[0].statline.PTS;
+
+    simulations[1].statline.PTS = round1(simulations[1].rawPTS * factorB);
+    simulations[1].totalPTS = simulations[1].statline.PTS;
+  }
 
   const scores = simulations
     .map((sim) => ({

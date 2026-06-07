@@ -11,11 +11,12 @@ export function normalizePlayerName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-/** Standard snake draft order. */
+/** Back-and-forth for two players; snake draft when more than two. */
 export function buildDraftOrder(playerIds: string[], picksPerPlayer: number): string[] {
   const order: string[] = [];
+  const snake = playerIds.length > 2;
   for (let round = 0; round < picksPerPlayer; round++) {
-    const ids = round % 2 === 0 ? [...playerIds] : [...playerIds].reverse();
+    const ids = snake && round % 2 === 1 ? [...playerIds].reverse() : [...playerIds];
     order.push(...ids);
   }
   return order;

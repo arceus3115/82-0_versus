@@ -175,7 +175,7 @@ export class GameEngine {
     this.state.lastPick = null;
     this.state.pickHistory = [];
     this.state.phase = "drafting";
-    const label = "snake draft";
+    const label = ids.length > 2 ? "snake draft" : "back-and-forth draft";
     this.pushFeed(`Draft started — ${label}.`);
     this.offerCardsForCurrentPick();
   }

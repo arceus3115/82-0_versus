@@ -108,7 +108,8 @@ export function DraftScreen({
         >
           <div className="pick-banner__text">
             <p className="eyebrow">
-              Snake · Pick {pickNumber}/{state.totalDraftPicks}
+              {state.players.length > 2 ? "Snake" : "Back & forth"} · Pick {pickNumber}/
+              {state.totalDraftPicks}
             </p>
             <h2>{isMyTurn ? "You're on the clock" : `Waiting on ${picker?.name}`}</h2>
           </div>
