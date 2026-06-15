@@ -83,6 +83,7 @@ export interface LobbyPlayer {
   name: string;
   ready: boolean;
   confirmed: boolean;
+  connected: boolean;
   isHost: boolean;
   team: InternalCard[];
   muTeam: number;

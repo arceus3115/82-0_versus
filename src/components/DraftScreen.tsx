@@ -28,6 +28,7 @@ export function DraftScreen({
   const currentPickerId = state.draftOrder[state.currentPickIndex];
   const isMyTurn = currentPickerId === playerId;
   const picker = state.players.find((p) => p.id === currentPickerId);
+  const pickerLabel = picker?.name ?? "another drafter";
   const others = state.players.filter((p) => p.id !== playerId);
   const me = state.players.find((p) => p.id === playerId);
   const pickNumber = state.currentPickIndex + 1;
@@ -111,7 +112,7 @@ export function DraftScreen({
               {state.players.length > 2 ? "Snake" : "Back & forth"} · Pick {pickNumber}/
               {state.totalDraftPicks}
             </p>
-            <h2>{isMyTurn ? "You're on the clock" : `Waiting on ${picker?.name}`}</h2>
+            <h2>{isMyTurn ? "You're on the clock" : `Waiting on ${pickerLabel}`}</h2>
           </div>
           <div className={`timer-badge ${secondsLeft <= 5 ? "timer-badge--urgent" : ""}`}>
             {secondsLeft}s

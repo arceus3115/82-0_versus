@@ -31,12 +31,16 @@ import type {
   PlayerSeasonRaw,
 } from "./types";
 
+const PICK_OVERDUE_GRACE_MS = 500;
+const PICK_WATCHDOG_INTERVAL_MS = 1_000;
+
 function createPlayer(id: string, name: string, isHost: boolean): LobbyPlayer {
   return {
     id,
     name,
     ready: isHost,
     confirmed: false,
+    connected: true,
     isHost,
     team: [],
     muTeam: 0.5,
@@ -62,6 +66,8 @@ export class GameEngine {
   private offeredInternal: InternalCard[] = [];
   private recentOfferNames: string[] = [];
   private pickTimer: ReturnType<typeof setTimeout> | null = null;
+  private pickWatchdog: ReturnType<typeof setInterval> | null = null;
+  private resolvingPick = false;
   private tournamentTimer: ReturnType<typeof setTimeout> | null = null;
   private onChange: (state: LobbyState) => void;
 
@@ -138,8 +144,77 @@ export class GameEngine {
     }
   }
 
+  private startPickWatchdog() {
+    this.stopPickWatchdog();
+    this.pickWatchdog = setInterval(() => {
+      if (this.state.phase !== "drafting" || this.state.pickDeadline == null) return;
+      if (Date.now() > this.state.pickDeadline + PICK_OVERDUE_GRACE_MS) {
+        this.forceResolveCurrentPick();
+      }
+    }, PICK_WATCHDOG_INTERVAL_MS);
+  }
+
+  private stopPickWatchdog() {
+    if (this.pickWatchdog) {
+      clearInterval(this.pickWatchdog);
+      this.pickWatchdog = null;
+    }
+  }
+
   private currentPickerId(): string | null {
     return this.state.draftOrder[this.state.currentPickIndex] ?? null;
+  }
+
+  private ensurePicker(pickerId: string): LobbyPlayer {
+    const existing = this.state.players.find((p) => p.id === pickerId);
+    if (existing) return existing;
+
+    const recovered = createPlayer(pickerId, "Disconnected", false);
+    recovered.ready = true;
+    this.state.players.push(recovered);
+    this.pushFeed("Recovered a missing drafter to keep the draft moving.");
+    return recovered;
+  }
+
+  private pickFirstValidCard(): InternalCard | null {
+    const drafted = getDraftedPool(this.state.players);
+    const isValid = (card: InternalCard) =>
+      !drafted.ids.has(card.id) && !drafted.names.has(normalizePlayerName(card.player_name));
+
+    const fromOffer = this.offeredInternal.find(isValid);
+    if (fromOffer) return fromOffer;
+
+    this.offeredInternal = generateCardOffer(this.pool, drafted, this.rng, this.recentOfferSet());
+    this.rememberOffer(this.offeredInternal);
+    this.state.offeredCards = toDisplayOffer(this.offeredInternal);
+    return this.offeredInternal.find(isValid) ?? null;
+  }
+
+  private applyPick(player: LobbyPlayer, card: InternalCard, auto: boolean) {
+    player.team.push(card);
+    Object.assign(player, syncTeamStats(player));
+
+    const pickRecord: DraftPickRecord = {
+      pickNumber: this.state.currentPickIndex + 1,
+      drafterId: player.id,
+      drafterName: player.name,
+      card: toDisplayCard(card),
+    };
+    this.state.lastPick = pickRecord;
+    this.state.pickHistory = [pickRecord, ...this.state.pickHistory];
+
+    const label = auto ? "(auto-pick)" : "";
+    this.pushFeed(`${player.name} drafted ${card.player_name} (${card.season}) ${label}`.trim());
+
+    this.state.currentPickIndex += 1;
+    this.clearPickTimer();
+
+    if (this.state.currentPickIndex >= this.state.totalDraftPicks) {
+      this.beginConfirming();
+      return;
+    }
+
+    this.offerCardsForCurrentPick();
   }
 
   private offerCardsForCurrentPick() {
@@ -149,7 +224,7 @@ export class GameEngine {
     this.state.offeredCards = toDisplayOffer(this.offeredInternal);
     this.state.pickDeadline = Date.now() + PICK_TIMER_MS;
     this.clearPickTimer();
-    this.pickTimer = setTimeout(() => this.autoPick(), PICK_TIMER_MS);
+    this.pickTimer = setTimeout(() => this.forceResolveCurrentPick(), PICK_TIMER_MS);
     const picker = this.state.players.find((p) => p.id === this.currentPickerId());
     if (picker) {
       this.pushFeed(`Pick ${this.state.currentPickIndex + 1}: ${picker.name} is on the clock.`);
@@ -157,12 +232,34 @@ export class GameEngine {
     this.emit();
   }
 
-  private autoPick() {
-    if (this.state.phase !== "drafting") return;
+  private forceResolveCurrentPick() {
+    if (this.state.phase !== "drafting" || this.resolvingPick) return;
+    this.resolvingPick = true;
+
     const pickerId = this.currentPickerId();
-    if (!pickerId) return;
-    const cardId = this.state.offeredCards[0]?.id;
-    if (cardId) this.handlePick(pickerId, cardId, true);
+    try {
+      if (!pickerId) {
+        if (this.state.currentPickIndex >= this.state.totalDraftPicks) {
+          this.beginConfirming();
+        } else {
+          this.pushFeed("Draft stalled — moving to lineup confirmation.");
+          this.beginConfirming();
+        }
+        return;
+      }
+
+      const player = this.ensurePicker(pickerId);
+      const card = this.pickFirstValidCard();
+      if (!card) {
+        this.pushFeed("No draftable players left — ending the draft.");
+        this.beginConfirming();
+        return;
+      }
+
+      this.applyPick(player, card, true);
+    } finally {
+      this.resolvingPick = false;
+    }
   }
 
   private beginDraft() {
@@ -177,6 +274,7 @@ export class GameEngine {
     this.state.phase = "drafting";
     const label = ids.length > 2 ? "snake draft" : "back-and-forth draft";
     this.pushFeed(`Draft started — ${label}.`);
+    this.startPickWatchdog();
     this.offerCardsForCurrentPick();
   }
 
@@ -185,6 +283,7 @@ export class GameEngine {
     this.state.offeredCards = [];
     this.state.pickDeadline = null;
     this.clearPickTimer();
+    this.stopPickWatchdog();
     for (const player of this.state.players) {
       player.confirmed = false;
     }
@@ -277,6 +376,12 @@ export class GameEngine {
   }
 
   private tryFinish() {
+    for (const player of this.state.players) {
+      if (!player.connected && player.team.length === PICKS_PER_PLAYER && !player.confirmed) {
+        player.confirmed = true;
+        this.pushFeed(`${player.name} auto-confirmed (disconnected).`);
+      }
+    }
     if (!this.state.players.every((p) => p.confirmed)) return;
     this.beginTournament();
   }
@@ -293,9 +398,19 @@ export class GameEngine {
 
   removePlayer(id: string) {
     if (id === this.state.hostId) return;
-    const name = this.state.players.find((p) => p.id === id)?.name ?? "Player";
-    this.state.players = this.state.players.filter((p) => p.id !== id);
-    this.pushFeed(`${name} left the lobby.`);
+    const player = this.state.players.find((p) => p.id === id);
+    if (!player) return;
+
+    if (this.state.phase === "waiting") {
+      this.state.players = this.state.players.filter((p) => p.id !== id);
+      this.pushFeed(`${player.name} left the lobby.`);
+      this.emit();
+      return;
+    }
+
+    if (!player.connected) return;
+    player.connected = false;
+    this.pushFeed(`${player.name} disconnected.`);
     this.emit();
   }
 
@@ -357,39 +472,17 @@ export class GameEngine {
       drafted.ids.has(card.id) ||
       drafted.names.has(normalizePlayerName(card.player_name))
     ) {
+      if (auto) this.forceResolveCurrentPick();
       return;
     }
 
-    player.team.push(card);
-    Object.assign(player, syncTeamStats(player));
-
-    const pickRecord: DraftPickRecord = {
-      pickNumber: this.state.currentPickIndex + 1,
-      drafterId: player.id,
-      drafterName: player.name,
-      card: toDisplayCard(card),
-    };
-    this.state.lastPick = pickRecord;
-    this.state.pickHistory = [pickRecord, ...this.state.pickHistory];
-
-    const label = auto ? "(auto-pick)" : "";
-    this.pushFeed(`${player.name} drafted ${card.player_name} (${card.season}) ${label}`.trim());
-
-    this.state.currentPickIndex += 1;
-    this.clearPickTimer();
-
-    if (this.state.currentPickIndex >= this.state.totalDraftPicks) {
-      this.beginConfirming();
-      return;
-    }
-
-    this.offerCardsForCurrentPick();
+    this.applyPick(player, card, auto);
   }
 
   private refreshOfferTimer() {
     this.state.pickDeadline = Date.now() + PICK_TIMER_MS;
     this.clearPickTimer();
-    this.pickTimer = setTimeout(() => this.autoPick(), PICK_TIMER_MS);
+    this.pickTimer = setTimeout(() => this.forceResolveCurrentPick(), PICK_TIMER_MS);
   }
 
   private handleFullMulligan(playerId: string) {
@@ -483,6 +576,7 @@ export class GameEngine {
       player.team = [];
       player.ready = false;
       player.confirmed = false;
+      player.connected = true;
       player.muTeam = 0.5;
       player.sigmaTeam = 0.04;
       player.tauTeam = 0.05;
@@ -508,6 +602,7 @@ export class GameEngine {
 
   destroy() {
     this.clearPickTimer();
+    this.stopPickWatchdog();
     this.clearTournamentTimer();
   }
 }
