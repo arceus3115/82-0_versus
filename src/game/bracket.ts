@@ -208,6 +208,39 @@ export function higherSeedWins(seeds: string[], playerAId: string, playerBId: st
   return rankA <= rankB ? playerAId : playerBId;
 }
 
+/** Finish order from 1st place downward (champion first). */
+export function getFinishOrder(tournament: TournamentState): string[] {
+  if (!tournament.championId) return [];
+
+  const rounds = Math.max(...tournament.matches.map((m) => m.round)) + 1;
+  const order: string[] = [tournament.championId];
+
+  const finalRound = rounds - 1;
+  const finalMatch = tournament.matches.find(
+    (m) => m.round === finalRound && m.status === "complete" && m.winnerId,
+  );
+  if (finalMatch?.playerAId && finalMatch.playerBId) {
+    const runnerUp =
+      finalMatch.winnerId === finalMatch.playerAId ? finalMatch.playerBId : finalMatch.playerAId;
+    if (runnerUp) order.push(runnerUp);
+  }
+
+  const semiRound = finalRound - 1;
+  if (semiRound >= 0) {
+    const semiLosers = tournament.matches
+      .filter((m) => m.round === semiRound && m.status === "complete" && m.winnerId)
+      .map((m) => {
+        if (!m.playerAId || !m.playerBId) return null;
+        return m.winnerId === m.playerAId ? m.playerBId : m.playerAId;
+      })
+      .filter((id): id is string => !!id && !order.includes(id))
+      .sort((a, b) => seedRank(tournament.seeds, a) - seedRank(tournament.seeds, b));
+    order.push(...semiLosers);
+  }
+
+  return order;
+}
+
 export function getRoundLabel(roundIdx: number, totalRounds: number): string {
   if (totalRounds <= 1) return "Final";
   if (roundIdx === totalRounds - 1) return "Final";

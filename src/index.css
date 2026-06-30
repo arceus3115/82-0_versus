@@ -203,6 +203,35 @@ p {
   color: var(--win);
 }
 
+.standings-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.standings-list__item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.95rem;
+}
+
+.standings-list__item--you {
+  color: var(--you);
+}
+
+.standings-list__rank {
+  flex: 0 0 3rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.standings-list__name {
+  flex: 1;
+}
+
 .mode-buttons,
 .home-actions,
 .join-row,

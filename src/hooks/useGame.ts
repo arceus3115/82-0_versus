@@ -128,6 +128,46 @@ export function useGame() {
     }
   };
 
+  const startSolo = async (displayName: string): Promise<boolean> => {
+    setConnecting(true);
+    setConnectingMessage(undefined);
+    setError(null);
+    setName(displayName);
+    setConnectionMode("solo");
+    connectionRef.current?.destroy();
+    engineRef.current?.destroy();
+    engineRef.current = null;
+    try {
+      const pool = requirePool();
+      const conn = createConnection("solo", {
+        onState: setState,
+        onAssigned: (id, host) => {
+          setPlayerId(id);
+          setIsHost(host);
+        },
+        onError: setError,
+        onConnectingStatus: setConnectingMessage,
+      });
+      connectionRef.current = conn;
+
+      const { playerId: soloId } = await conn.createLobby();
+      const engine = new GameEngine(soloId, displayName, pool, syncState);
+      engineRef.current = engine;
+      engine.state.code = "SOLO";
+      setPlayerId(soloId);
+      setIsHost(true);
+      engine.startSoloGame();
+      setState(engine.getState());
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to start solo game");
+      return false;
+    } finally {
+      setConnecting(false);
+      setConnectingMessage(undefined);
+    }
+  };
+
   const joinLobby = async (
     code: string,
     displayName: string,
@@ -192,6 +232,7 @@ export function useGame() {
     dataError,
     dataReady: playerPool !== null,
     createLobby,
+    startSolo,
     joinLobby,
     setReady,
     startGame,

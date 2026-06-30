@@ -35,6 +35,12 @@ export default function App() {
     if (ok) enterGame();
   };
 
+  const handlePlaySolo = async () => {
+    if (!nameInput.trim()) return;
+    const ok = await game.startSolo(nameInput.trim());
+    if (ok) enterGame();
+  };
+
   const handleJoin = async () => {
     if (!nameInput.trim() || !codeInput.trim()) return;
     const ok = await game.joinLobby(codeInput.trim(), nameInput.trim(), connectionMode);
@@ -83,6 +89,29 @@ export default function App() {
             )}
 
             <label>
+              Display name
+              <input
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="e.g. Kenny"
+                maxLength={20}
+              />
+            </label>
+
+            <button
+              className="btn btn-primary btn-large btn-block"
+              disabled={game.connecting || !game.dataReady || !nameInput.trim()}
+              onClick={handlePlaySolo}
+            >
+              Play solo
+            </button>
+            <p className="mode-hint">4-player snake draft vs three AI drafters.</p>
+
+            <div className="home-form-divider" aria-hidden>
+              <span>or play with friends</span>
+            </div>
+
+            <label>
               Connection method
               <select
                 value={connectionMode}
@@ -91,16 +120,6 @@ export default function App() {
                 <option value="local">Local</option>
                 <option value="online">Online</option>
               </select>
-            </label>
-
-            <label>
-              Display name
-              <input
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                placeholder="e.g. Kenny"
-                maxLength={20}
-              />
             </label>
 
             <div className="home-form-host">
@@ -145,13 +164,16 @@ export default function App() {
     );
   }
 
+  const modeTag =
+    game.state.gameMode === "solo"
+      ? "Solo · 4 players"
+      : `${game.state.code} · ${game.connectionMode === "local" ? "Local" : "Online"}`;
+
   return (
     <div className="app app--wide">
       <header className="topbar">
         <span className="logo">VERSUS</span>
-        <span className="tag">
-          {game.state.code} · {game.connectionMode === "local" ? "Local" : "Online"}
-        </span>
+        <span className="tag">{modeTag}</span>
       </header>
 
       <main>
@@ -184,7 +206,7 @@ export default function App() {
         )}
         {game.state.phase === "tournament" && <TournamentScreen state={game.state} />}
         {game.state.phase === "finished" && (
-          <ResultsScreen state={game.state} onPlayAgain={game.playAgain} />
+          <ResultsScreen state={game.state} playerId={game.playerId} onPlayAgain={game.playAgain} />
         )}
       </main>
     </div>

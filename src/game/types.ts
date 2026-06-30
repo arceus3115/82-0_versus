@@ -1,5 +1,9 @@
 export type GamePhase = "waiting" | "drafting" | "confirming" | "tournament" | "finished";
 
+export type GameMode = "multiplayer" | "solo";
+
+export type BotPersonality = "greedy" | "stars" | "value" | "random";
+
 export type BracketMatchStatus = "pending" | "ready" | "complete" | "bye";
 
 export interface BracketMatch {
@@ -85,6 +89,8 @@ export interface LobbyPlayer {
   confirmed: boolean;
   connected: boolean;
   isHost: boolean;
+  isBot?: boolean;
+  botPersonality?: BotPersonality;
   team: InternalCard[];
   muTeam: number;
   sigmaTeam: number;
@@ -141,6 +147,7 @@ export interface MatchResult {
 export interface LobbyState {
   code: string;
   phase: GamePhase;
+  gameMode: GameMode;
   rngSeed: number;
   hostId: string;
   players: LobbyPlayer[];

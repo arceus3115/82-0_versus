@@ -1,7 +1,7 @@
 import type { ClientMessage, LobbyState } from "../game/types";
 
 export type ConnectionRole = "host" | "guest";
-export type ConnectionMode = "local" | "online";
+export type ConnectionMode = "local" | "online" | "solo";
 
 export interface GameTransportHandlers {
   onState: (state: LobbyState) => void;
