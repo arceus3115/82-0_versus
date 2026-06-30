@@ -12,6 +12,7 @@ interface Props {
 export function ConfirmScreen({ state, playerId, onConfirm, onSwap }: Props) {
   const me = state.players.find((p) => p.id === playerId);
   const lineupReady = (me?.team.length ?? 0) === PICKS_PER_PLAYER;
+  const isSolo = state.gameMode === "solo";
 
   return (
     <section className="finalize-screen">
@@ -19,7 +20,9 @@ export function ConfirmScreen({ state, playerId, onConfirm, onSwap }: Props) {
         <p className="eyebrow">Draft complete</p>
         <h2>Lock in your lineup</h2>
         <p className="subcopy">
-          Swap positions on your court, then confirm. All players must lock in to start the bracket.
+          {isSolo
+            ? "Swap positions on your court, then lock in to start the bracket."
+            : "Swap positions on your court, then confirm. All players must lock in to start the bracket."}
         </p>
       </div>
 
@@ -63,7 +66,7 @@ export function ConfirmScreen({ state, playerId, onConfirm, onSwap }: Props) {
             )}
           </>
         )}
-        {me?.confirmed && (
+        {me?.confirmed && !isSolo && (
           <p className="waiting-host">
             Waiting for {state.players.filter((p) => !p.confirmed).length} player
             {state.players.filter((p) => !p.confirmed).length === 1 ? "" : "s"} to lock in…

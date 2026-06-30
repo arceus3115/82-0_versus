@@ -7,14 +7,18 @@ interface Props {
 }
 
 export function ConnectingOverlay({ connectionMode, phase = "connect", statusMessage }: Props) {
+  const modeLabel =
+    connectionMode === "online" ? "Online" : connectionMode === "solo" ? "Solo" : "Local";
   const isOnline = connectionMode === "online";
   const title = phase === "sync" ? "Syncing lobby" : "Connecting";
   const defaultDetail =
     phase === "sync"
       ? "Pulling the latest room state…"
-      : isOnline
-        ? "First connect after idle can take up to a minute while the server wakes."
-        : "Opening your local lobby channel…";
+      : connectionMode === "solo"
+        ? "Setting up your solo draft…"
+        : isOnline
+          ? "First connect after idle can take up to a minute while the server wakes."
+          : "Opening your local lobby channel…";
   const detail = statusMessage ?? defaultDetail;
 
   return (
@@ -33,7 +37,7 @@ export function ConnectingOverlay({ connectionMode, phase = "connect", statusMes
           <span className="connecting-pulse connecting-pulse--1" />
           <span className="connecting-pulse connecting-pulse--2" />
         </div>
-        <p className="connecting-eyebrow">{isOnline ? "Online" : "Local"}</p>
+        <p className="connecting-eyebrow">{modeLabel}</p>
         <h2 className="connecting-title">{title}</h2>
         <p className="connecting-detail">{detail}</p>
         <div className="connecting-dots" aria-hidden>

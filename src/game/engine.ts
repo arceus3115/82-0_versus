@@ -19,10 +19,13 @@ import {
   getOfferExclusions,
   toDisplayOffer,
 } from "./draft";
+import { pickBotCard, randomBotPersonality } from "./botDraft";
+import { pickBotNames } from "./botNames";
 import { aggregateTeam, toDisplayCard } from "./model";
 import { resolveMatch } from "./resolve";
 import { generateLobbyCode, SeededRNG } from "./rng";
 import type {
+  BotPersonality,
   ClientMessage,
   DraftPickRecord,
   InternalCard,
@@ -33,6 +36,9 @@ import type {
 
 const PICK_OVERDUE_GRACE_MS = 500;
 const PICK_WATCHDOG_INTERVAL_MS = 1_000;
+const SOLO_BOT_COUNT = 3;
+const BOT_PICK_MIN_MS = 1_000;
+const BOT_PICK_MAX_MS = 2_000;
 
 function createPlayer(id: string, name: string, isHost: boolean): LobbyPlayer {
   return {
@@ -47,6 +53,15 @@ function createPlayer(id: string, name: string, isHost: boolean): LobbyPlayer {
     sigmaTeam: 0.04,
     tauTeam: 0.05,
     mulligan: { fullUsed: false, yearUsed: false },
+  };
+}
+
+function createBot(id: string, name: string, personality: BotPersonality): LobbyPlayer {
+  return {
+    ...createPlayer(id, name, false),
+    isBot: true,
+    botPersonality: personality,
+    ready: true,
   };
 }
 
@@ -66,6 +81,7 @@ export class GameEngine {
   private offeredInternal: InternalCard[] = [];
   private recentOfferNames: string[] = [];
   private pickTimer: ReturnType<typeof setTimeout> | null = null;
+  private botPickTimer: ReturnType<typeof setTimeout> | null = null;
   private pickWatchdog: ReturnType<typeof setInterval> | null = null;
   private resolvingPick = false;
   private tournamentTimer: ReturnType<typeof setTimeout> | null = null;
@@ -84,6 +100,7 @@ export class GameEngine {
     this.state = {
       code: generateLobbyCode(this.rng),
       phase: "waiting",
+      gameMode: "multiplayer",
       rngSeed: seed,
       hostId,
       players: [createPlayer(hostId, hostName, true)],
@@ -141,6 +158,13 @@ export class GameEngine {
     if (this.pickTimer) {
       clearTimeout(this.pickTimer);
       this.pickTimer = null;
+    }
+  }
+
+  private clearBotPickTimer() {
+    if (this.botPickTimer) {
+      clearTimeout(this.botPickTimer);
+      this.botPickTimer = null;
     }
   }
 
@@ -208,6 +232,7 @@ export class GameEngine {
 
     this.state.currentPickIndex += 1;
     this.clearPickTimer();
+    this.clearBotPickTimer();
 
     if (this.state.currentPickIndex >= this.state.totalDraftPicks) {
       this.beginConfirming();
@@ -222,14 +247,48 @@ export class GameEngine {
     this.offeredInternal = generateCardOffer(this.pool, drafted, this.rng, this.recentOfferSet());
     this.rememberOffer(this.offeredInternal);
     this.state.offeredCards = toDisplayOffer(this.offeredInternal);
-    this.state.pickDeadline = Date.now() + PICK_TIMER_MS;
     this.clearPickTimer();
-    this.pickTimer = setTimeout(() => this.forceResolveCurrentPick(), PICK_TIMER_MS);
+    this.clearBotPickTimer();
+
     const picker = this.state.players.find((p) => p.id === this.currentPickerId());
+    if (picker?.isBot) {
+      this.state.pickDeadline = null;
+      const delay = BOT_PICK_MIN_MS + this.rng.next() * (BOT_PICK_MAX_MS - BOT_PICK_MIN_MS);
+      this.botPickTimer = setTimeout(() => this.executeBotPick(), delay);
+    } else {
+      this.state.pickDeadline = Date.now() + PICK_TIMER_MS;
+      this.pickTimer = setTimeout(() => this.forceResolveCurrentPick(), PICK_TIMER_MS);
+    }
+
     if (picker) {
       this.pushFeed(`Pick ${this.state.currentPickIndex + 1}: ${picker.name} is on the clock.`);
     }
     this.emit();
+  }
+
+  private executeBotPick() {
+    if (this.state.phase !== "drafting" || this.resolvingPick) return;
+
+    const pickerId = this.currentPickerId();
+    const player = pickerId ? this.state.players.find((p) => p.id === pickerId) : null;
+    if (!player?.isBot) return;
+
+    this.resolvingPick = true;
+    try {
+      const drafted = getDraftedPool(this.state.players);
+      const personality = player.botPersonality ?? "random";
+      const card =
+        pickBotCard(this.offeredInternal, personality, drafted, this.rng) ??
+        this.pickFirstValidCard();
+      if (!card) {
+        this.pushFeed("No draftable players left — ending the draft.");
+        this.beginConfirming();
+        return;
+      }
+      this.applyPick(player, card, false);
+    } finally {
+      this.resolvingPick = false;
+    }
   }
 
   private forceResolveCurrentPick() {
@@ -283,12 +342,21 @@ export class GameEngine {
     this.state.offeredCards = [];
     this.state.pickDeadline = null;
     this.clearPickTimer();
+    this.clearBotPickTimer();
     this.stopPickWatchdog();
     for (const player of this.state.players) {
       player.confirmed = false;
     }
+    if (this.state.gameMode === "solo") {
+      for (const player of this.state.players) {
+        if (player.isBot && player.team.length === PICKS_PER_PLAYER) {
+          player.confirmed = true;
+        }
+      }
+    }
     this.pushFeed("Draft complete — confirm your lineup to start the bracket.");
     this.emit();
+    this.tryFinish();
   }
 
   private beginTournament() {
@@ -377,13 +445,80 @@ export class GameEngine {
 
   private tryFinish() {
     for (const player of this.state.players) {
-      if (!player.connected && player.team.length === PICKS_PER_PLAYER && !player.confirmed) {
+      if (
+        (player.isBot || !player.connected) &&
+        player.team.length === PICKS_PER_PLAYER &&
+        !player.confirmed
+      ) {
         player.confirmed = true;
-        this.pushFeed(`${player.name} auto-confirmed (disconnected).`);
+        if (player.isBot) {
+          this.pushFeed(`${player.name} locked in.`);
+        } else {
+          this.pushFeed(`${player.name} auto-confirmed (disconnected).`);
+        }
       }
     }
     if (!this.state.players.every((p) => p.confirmed)) return;
     this.beginTournament();
+  }
+
+  private ensureSoloBots() {
+    for (let i = 1; i <= SOLO_BOT_COUNT; i++) {
+      const id = `bot-${i}`;
+      if (!this.state.players.some((p) => p.id === id)) {
+        this.state.players.push(createBot(id, "Bot", randomBotPersonality(this.rng)));
+      }
+    }
+  }
+
+  private assignBotIdentities() {
+    const names = pickBotNames(this.rng, SOLO_BOT_COUNT);
+    const bots = this.state.players.filter((p) => p.isBot);
+    for (let i = 0; i < bots.length; i++) {
+      bots[i].name = names[i] ?? `Bot ${i + 1}`;
+      bots[i].botPersonality = randomBotPersonality(this.rng);
+    }
+  }
+
+  private resetPlayersForNewDraft() {
+    for (const player of this.state.players) {
+      player.team = [];
+      player.confirmed = false;
+      player.connected = true;
+      player.ready = player.isHost || !!player.isBot;
+      player.muTeam = 0.5;
+      player.sigmaTeam = 0.04;
+      player.tauTeam = 0.05;
+      player.mulligan = { fullUsed: false, yearUsed: false };
+    }
+  }
+
+  startSoloGame() {
+    if (this.state.phase !== "waiting" && this.state.phase !== "finished") return;
+
+    this.mixRngEntropy();
+    this.recentOfferNames = [];
+    this.state.gameMode = "solo";
+    this.state.code = "SOLO";
+    this.state.winnerId = null;
+    this.state.result = null;
+    this.state.tournament = null;
+    this.state.draftOrder = [];
+    this.state.currentPickIndex = 0;
+    this.state.offeredCards = [];
+    this.state.pickDeadline = null;
+    this.state.totalDraftPicks = 0;
+    this.state.lastPick = null;
+    this.state.pickHistory = [];
+    this.clearPickTimer();
+    this.clearBotPickTimer();
+    this.clearTournamentTimer();
+
+    this.ensureSoloBots();
+    this.assignBotIdentities();
+    this.resetPlayersForNewDraft();
+    this.pushFeed("Solo game — 4-player snake draft.");
+    this.beginDraft();
   }
 
   addPlayer(id: string, name: string) {
@@ -569,6 +704,11 @@ export class GameEngine {
   private handlePlayAgain() {
     if (this.state.phase !== "finished") return;
 
+    if (this.state.gameMode === "solo") {
+      this.startSoloGame();
+      return;
+    }
+
     this.mixRngEntropy();
     this.recentOfferNames = [];
 
@@ -602,6 +742,7 @@ export class GameEngine {
 
   destroy() {
     this.clearPickTimer();
+    this.clearBotPickTimer();
     this.stopPickWatchdog();
     this.clearTournamentTimer();
   }

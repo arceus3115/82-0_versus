@@ -32,6 +32,7 @@ export function DraftScreen({
   const others = state.players.filter((p) => p.id !== playerId);
   const me = state.players.find((p) => p.id === playerId);
   const pickNumber = state.currentPickIndex + 1;
+  const displaySeconds = state.pickDeadline ? secondsLeft : 0;
 
   useEffect(() => {
     if (!state.pickDeadline) return;
@@ -44,15 +45,15 @@ export function DraftScreen({
   }, [state.pickDeadline, state.currentPickIndex]);
 
   useEffect(() => {
-    if (!isMyTurn || secondsLeft <= 0 || secondsLeft > 5) return;
-    if (lastBeepSecond.current === secondsLeft) return;
-    lastBeepSecond.current = secondsLeft;
+    if (!isMyTurn || displaySeconds <= 0 || displaySeconds > 5) return;
+    if (lastBeepSecond.current === displaySeconds) return;
+    lastBeepSecond.current = displaySeconds;
     playTimerTick();
-  }, [secondsLeft, isMyTurn]);
+  }, [displaySeconds, isMyTurn]);
 
   useEffect(() => {
-    if (secondsLeft > 5) lastBeepSecond.current = -1;
-  }, [secondsLeft, state.currentPickIndex]);
+    if (displaySeconds > 5) lastBeepSecond.current = -1;
+  }, [displaySeconds, state.currentPickIndex]);
 
   return (
     <div className="draft-shell">
@@ -114,8 +115,8 @@ export function DraftScreen({
             </p>
             <h2>{isMyTurn ? "You're on the clock" : `Waiting on ${pickerLabel}`}</h2>
           </div>
-          <div className={`timer-badge ${secondsLeft <= 5 ? "timer-badge--urgent" : ""}`}>
-            {secondsLeft}s
+          <div className={`timer-badge ${displaySeconds <= 5 ? "timer-badge--urgent" : ""}`}>
+            {displaySeconds}s
           </div>
         </header>
 
